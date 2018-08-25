@@ -90,7 +90,7 @@ int ff_getaddrinfo(const char *node, const char *service,
     if (!sin)
         return EAI_FAIL;
     sin->sin_family = AF_INET;
-
+//node就是hostname，如果不为空
     if (node) {
         if (!ff_inet_aton(node, &sin->sin_addr)) {
             if (hints && (hints->ai_flags & AI_NUMERICHOST)) {

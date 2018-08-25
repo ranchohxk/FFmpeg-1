@@ -37,7 +37,7 @@ extern const AVClass ffurl_context_class;
 
 typedef struct URLContext {
     const AVClass *av_class;    /**< information for av_log(). Set by url_open(). */
-    const struct URLProtocol *prot;
+    const struct URLProtocol *prot;//URLProtocol结构体
     void *priv_data;
     char *filename;             /**< specified URL */
     int flags;
@@ -45,14 +45,15 @@ typedef struct URLContext {
     int is_streamed;            /**< true if streamed (no seek possible), default = false */
     int is_connected;
     AVIOInterruptCB interrupt_callback;
-    int64_t rw_timeout;         /**< maximum time to wait for (network) read/write operation completion, in mcs */
+    int64_t rw_timeout;         /**< 最大等待时间(网络)读/写操作完成,在mcs，maximum time to wait for (network) read/write operation completion, in mcs */
     const char *protocol_whitelist;
     const char *protocol_blacklist;
     int min_packet_size;        /**< if non zero, the stream is packetized with this min packet size */
 } URLContext;
 
 typedef struct URLProtocol {
-    const char *name;
+    const char *name;//协议的名称
+    //各种协议对应的回调函数
     int     (*url_open)( URLContext *h, const char *url, int flags);
     /**
      * This callback is to be used by protocols which open further nested

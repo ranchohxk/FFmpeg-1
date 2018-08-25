@@ -47,11 +47,16 @@ typedef struct TCPContext {
 #define D AV_OPT_FLAG_DECODING_PARAM
 #define E AV_OPT_FLAG_ENCODING_PARAM
 static const AVOption options[] = {
+    //tcp监听模式，类似于相当于服务器，等客户端来连接端口
     { "listen",          "Listen for incoming connections",  OFFSET(listen),         AV_OPT_TYPE_INT, { .i64 = 0 },     0,       2,       .flags = D|E },
-    { "timeout",     "set timeout (in microseconds) of socket I/O operations", OFFSET(rw_timeout),     AV_OPT_TYPE_INT, { .i64 = -1 },         -1, INT_MAX, .flags = D|E },
-    { "listen_timeout",  "Connection awaiting timeout (in milliseconds)",      OFFSET(listen_timeout), AV_OPT_TYPE_INT, { .i64 = -1 },         -1, INT_MAX, .flags = D|E },
-    { "send_buffer_size", "Socket send buffer size (in bytes)",                OFFSET(send_buffer_size), AV_OPT_TYPE_INT, { .i64 = -1 },         -1, INT_MAX, .flags = D|E },
-    { "recv_buffer_size", "Socket receive buffer size (in bytes)",             OFFSET(recv_buffer_size), AV_OPT_TYPE_INT, { .i64 = -1 },         -1, INT_MAX, .flags = D|E },
+	//超时参数，例如20秒，持续20秒没有数据则退出
+	{ "timeout",     "set timeout (in microseconds) of socket I/O operations", OFFSET(rw_timeout),     AV_OPT_TYPE_INT, { .i64 = -1 },         -1, INT_MAX, .flags = D|E },
+    //监听端口时，默认处于持续监听状态，，设置指定长度监听超时 如5秒
+	{ "listen_timeout",  "Connection awaiting timeout (in milliseconds)",      OFFSET(listen_timeout), AV_OPT_TYPE_INT, { .i64 = -1 },         -1, INT_MAX, .flags = D|E },
+	//tcp传输发送buffer的大小，buffer越小，传输越频繁，网络开销越大
+	{ "send_buffer_size", "Socket send buffer size (in bytes)",                OFFSET(send_buffer_size), AV_OPT_TYPE_INT, { .i64 = -1 },         -1, INT_MAX, .flags = D|E },
+	//tcp传输接收buffer的大小，buffer越小，传输越频繁，网络开销越大
+	{ "recv_buffer_size", "Socket receive buffer size (in bytes)",             OFFSET(recv_buffer_size), AV_OPT_TYPE_INT, { .i64 = -1 },         -1, INT_MAX, .flags = D|E },
     { NULL }
 };
 
@@ -65,7 +70,8 @@ static const AVClass tcp_class = {
 /* return non zero if error */
 static int tcp_open(URLContext *h, const char *uri, int flags)
 {
-    struct addrinfo hints = { 0 }, *ai, *cur_ai;
+	av_log(NULL, AV_LOG_ERROR, "tcp_open!\n");
+	struct addrinfo hints = { 0 }, *ai, *cur_ai;
     int port, fd = -1;
     TCPContext *s = h->priv_data;
     const char *p;
@@ -73,18 +79,21 @@ static int tcp_open(URLContext *h, const char *uri, int flags)
     int ret;
     char hostname[1024],proto[1024],path[1024];
     char portstr[10];
-    s->open_timeout = 5000000;
-
+    s->open_timeout = 5000000;//tcp打开超时 5秒
+	//解析uri  ，uri就是（tcp://主机名：端口号）,，例如：tcp://221.228.226.23:80
     av_url_split(proto, sizeof(proto), NULL, 0, hostname, sizeof(hostname),
         &port, path, sizeof(path), uri);
+	//如果开头不是tcp，直接报错
     if (strcmp(proto, "tcp"))
         return AVERROR(EINVAL);
+	//端口号如果不在0~65536范围内
     if (port <= 0 || port >= 65536) {
         av_log(h, AV_LOG_ERROR, "Port missing in uri\n");
         return AVERROR(EINVAL);
     }
     p = strchr(uri, '?');
     if (p) {
+		//找到listen这个option
         if (av_find_info_tag(buf, sizeof(buf), "listen", p)) {
             char *endptr = NULL;
             s->listen = strtol(buf, &endptr, 10);
@@ -92,26 +101,36 @@ static int tcp_open(URLContext *h, const char *uri, int flags)
             if (buf == endptr)
                 s->listen = 1;
         }
+		//找到timeout这个option
         if (av_find_info_tag(buf, sizeof(buf), "timeout", p)) {
-            s->rw_timeout = strtol(buf, NULL, 10);
+            s->rw_timeout = strtol(buf, NULL, 10);//buf转10进制，赋值给rw_timeout
         }
         if (av_find_info_tag(buf, sizeof(buf), "listen_timeout", p)) {
             s->listen_timeout = strtol(buf, NULL, 10);
         }
     }
+	//如果设置了超时参数
     if (s->rw_timeout >= 0) {
         s->open_timeout =
-        h->rw_timeout   = s->rw_timeout;
+        h->rw_timeout   = s->rw_timeout;//tcpcontext 超时参数赋值给urlcontext超时参数,这里可以看到超时时间也被赋值给打开超时时间了
     }
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    snprintf(portstr, sizeof(portstr), "%d", port);
+	//hints.ai_family = AF_INET;//只支持ipv4，解析节省一点时间，但是不支持ipv6
+    hints.ai_family = AF_UNSPEC;//先解析ipv6再解析ipv4，部分网址是ipv4的，解析ipv6浪费时间
+    hints.ai_socktype = SOCK_STREAM;//指定流类型
+    snprintf(portstr, sizeof(portstr), "%d", port);//把port从int型转char[]型
+	//tcp端口监听模式，相当于服务端，等待客户端来连接
     if (s->listen)
         hints.ai_flags |= AI_PASSIVE;
-    if (!hostname[0])
+	//DNS解析，获取ip地址
+	//如果没有获取到主机名
+    if (!hostname[0]){	
         ret = getaddrinfo(NULL, portstr, &hints, &ai);
-    else
+    }
+	//获取到主机名
+    else{
         ret = getaddrinfo(hostname, portstr, &hints, &ai);
+    }
+	//getaddrinfo返回0，代表成功，非0则代表解析失败，解析失败的话则直接返回
     if (ret) {
         av_log(h, AV_LOG_ERROR,
                "Failed to resolve hostname %s: %s\n",
@@ -119,7 +138,7 @@ static int tcp_open(URLContext *h, const char *uri, int flags)
         return AVERROR(EIO);
     }
 
-    cur_ai = ai;
+    cur_ai = ai;//结构体指针赋值
 
  restart:
 #if HAVE_STRUCT_SOCKADDR_IN6
@@ -131,7 +150,7 @@ static int tcp_open(URLContext *h, const char *uri, int flags)
         }
     }
 #endif
-
+//创建socket，返回socketfd
     fd = ff_socket(cur_ai->ai_family,
                    cur_ai->ai_socktype,
                    cur_ai->ai_protocol);
@@ -140,7 +159,10 @@ static int tcp_open(URLContext *h, const char *uri, int flags)
         goto fail;
     }
 
-    /* Set the socket's send or receive buffer sizes, if specified.
+    /* 
+       设置套接字的发送或接收缓冲区大小,如果指定。
+　　     如果未指定的或设置失败,使用系统默认值
+       Set the socket's send or receive buffer sizes, if specified.
        If unspecified or setting fails, system default is used. */
     if (s->recv_buffer_size > 0) {
         setsockopt (fd, SOL_SOCKET, SO_RCVBUF, &s->recv_buffer_size, sizeof (s->recv_buffer_size));
@@ -150,7 +172,7 @@ static int tcp_open(URLContext *h, const char *uri, int flags)
     }
 
     if (s->listen == 2) {
-        // multi-client
+        // multi-client 绑定套接字
         if ((ret = ff_listen(fd, cur_ai->ai_addr, cur_ai->ai_addrlen)) < 0)
             goto fail1;
     } else if (s->listen == 1) {
@@ -161,6 +183,7 @@ static int tcp_open(URLContext *h, const char *uri, int flags)
         // Socket descriptor already closed here. Safe to overwrite to client one.
         fd = ret;
     } else {
+		//建立套接字连接，以及超时检测(建立连接过程中执行三次握手，需要看linux内核代码看具体实现)
         if ((ret = ff_listen_connect(fd, cur_ai->ai_addr, cur_ai->ai_addrlen,
                                      s->open_timeout / 1000, h, !!cur_ai->ai_next)) < 0) {
 
@@ -202,6 +225,7 @@ static int tcp_accept(URLContext *s, URLContext **c)
     if ((ret = ffurl_alloc(c, s->filename, s->flags, &s->interrupt_callback)) < 0)
         return ret;
     cc = (*c)->priv_data;
+	//套接字接受连接
     ret = ff_accept(sc->fd, sc->listen_timeout, s);
     if (ret < 0)
         return ret;
@@ -209,16 +233,23 @@ static int tcp_accept(URLContext *s, URLContext **c)
     return 0;
 }
 
+/**
+*buffer读取
+*/
 static int tcp_read(URLContext *h, uint8_t *buf, int size)
 {
+	av_log(NULL, AV_LOG_ERROR, "tcp_read!\n");
+
     TCPContext *s = h->priv_data;
     int ret;
-
+	//如果flag不是AVIO_FLAG_NONBLOCK,一般都不是AVIO_FLAG_NONBLOCK
     if (!(h->flags & AVIO_FLAG_NONBLOCK)) {
+		//超时处理（处理上层设置的timeout），返回1，代表超时
         ret = ff_network_wait_fd_timeout(s->fd, 0, h->rw_timeout, &h->interrupt_callback);
         if (ret)
             return ret;
     }
+	//fd: 接收端套接字描述符,buf：   用来存放recv函数接收到的数据的缓冲区,size: 指明buff的长度,flags:   一般置为0
     ret = recv(s->fd, buf, size, 0);
     return ret < 0 ? ff_neterrno() : ret;
 }
@@ -239,23 +270,27 @@ static int tcp_write(URLContext *h, const uint8_t *buf, int size)
 
 static int tcp_shutdown(URLContext *h, int flags)
 {
+	av_log(NULL, AV_LOG_ERROR, "tcp_shutdown!\n");
     TCPContext *s = h->priv_data;
     int how;
-
+//关闭sockfd的读写功能
     if (flags & AVIO_FLAG_WRITE && flags & AVIO_FLAG_READ) {
         how = SHUT_RDWR;
-    } else if (flags & AVIO_FLAG_WRITE) {
+    } else if (flags & AVIO_FLAG_WRITE) {//关闭sockfd的写功能
         how = SHUT_WR;
     } else {
-        how = SHUT_RD;
+        how = SHUT_RD;//关闭sockfd的读功能
     }
-
+//关闭一个套接字描述符，该描述字不能再由调用进程使用，
+//也就是说不能再作为read或write的第一个参数
     return shutdown(s->fd, how);
 }
 
 static int tcp_close(URLContext *h)
 {
+	av_log(NULL, AV_LOG_ERROR, "tcp_close!\n");
     TCPContext *s = h->priv_data;
+	//关闭套接字
     closesocket(s->fd);
     return 0;
 }

@@ -390,34 +390,43 @@ int av_demuxer_open(AVFormatContext *ic) {
     return 0;
 }
 
-/* Open input file and probe the format if necessary. */
+/* 
+*	打开输入文件，探测文件格式，返回的是探测文件所得的分数
+*	Open input file and probe the format if necessary. 
+*/
 static int init_input(AVFormatContext *s, const char *filename,
                       AVDictionary **options)
 {
     int ret;
     AVProbeData pd = { filename, NULL, 0 };
-    int score = AVPROBE_SCORE_RETRY;
-
+    int score = AVPROBE_SCORE_RETRY;//默认score 25分
+	//如果已经有了AVIOContext，也就是文件(协议)已经打开了
     if (s->pb) {
         s->flags |= AVFMT_FLAG_CUSTOM_IO;
-        if (!s->iformat)
+        if (!s->iformat)//如果AVFormatContext中没有指定AVInputformat,指定就调用av_probe_input_buffer2()推测AVInputFormat
             return av_probe_input_buffer2(s->pb, &s->iformat, filename,
                                          s, 0, s->format_probesize);
-        else if (s->iformat->flags & AVFMT_NOFILE)
+        else if (s->iformat->flags & AVFMT_NOFILE)//如果有AVInputFormat，且flag是AVFMT_NOFILE
             av_log(s, AV_LOG_WARNING, "Custom AVIOContext makes no sense and "
                                       "will be ignored with AVFMT_NOFILE format.\n");
         return 0;
     }
-
+	//如果已经指定了AVInputformat,且flag是AVFMT_NOFILE；
+	//或者如果没有指定AVInputFormat，调用av_probe_input_format2(NULL,…)根据文件路径判断文件格式，来获取AVInputFormat
+	//(注意)这里没有获取到AVIOContext  没有获取到AVIOContext就直接返回了？这里这样做是为了强调没有给函数提供输入数据，
+	//此时函数仅仅通过文件路径来推测AVInputFormat，所以这里的pb其实是null，是没有探测数据的
     if ((s->iformat && s->iformat->flags & AVFMT_NOFILE) ||
         (!s->iformat && (s->iformat = av_probe_input_format2(&pd, 0, &score))))
         return score;
-
+ 	//如果AVIOContext和AVInputFormat都没有指定的话
+	//调aviobuf.c中的avio_open函数来打开协议(打开文件),获取AVIOContext，如果获取失败了，直接返回
     if ((ret = s->io_open(s, &s->pb, filename, AVIO_FLAG_READ | s->avio_flags, options)) < 0)
         return ret;
 
-    if (s->iformat)
+    if (s->iformat)//如果协议打开有了AVInputforamt，则直接返回
         return 0;
+	//解完协议,创建打开一个AVIOContext后
+	//调用foramt.c中的av_probe_input_buffer2来探测获取AVInputFormat并返回探测分数
     return av_probe_input_buffer2(s->pb, &s->iformat, filename,
                                  s, 0, s->format_probesize);
 }
@@ -514,7 +523,7 @@ int avformat_open_input(AVFormatContext **ps, const char *filename,
     int i, ret = 0;
     AVDictionary *tmp = NULL;
     ID3v2ExtraMeta *id3v2_extra_meta = NULL;
-
+	//如果s为空，且没有申请内存的话，申请AVFormatContext内存
     if (!s && !(s = avformat_alloc_context()))
         return AVERROR(ENOMEM);
     if (!s->av_class) {
@@ -522,22 +531,23 @@ int avformat_open_input(AVFormatContext **ps, const char *filename,
         return AVERROR(EINVAL);
     }
     if (fmt)
-        s->iformat = fmt;
+        s->iformat = fmt;//AVInputFormat赋值给AVFormatContext的AVInputFormat
 
-    if (options)
+    if (options)//获取option，拷贝给tmp
         av_dict_copy(&tmp, *options, 0);
 
     if (s->pb) // must be before any goto fail
         s->flags |= AVFMT_FLAG_CUSTOM_IO;
-
+    //把获取的option设置给AVFormatContext
     if ((ret = av_opt_set_dict(s, &tmp)) < 0)
         goto fail;
-
+	//filename赋值给s->filename
     av_strlcpy(s->filename, filename ? filename : "", sizeof(s->filename));
+	//初始化协议与初始化解封装(文件探测等)
     if ((ret = init_input(s, filename, &tmp)) < 0)
         goto fail;
-    s->probe_score = ret;
-
+    s->probe_score = ret;//获取文件探测回来的分数
+	//协议白名单
     if (!s->protocol_whitelist && s->pb && s->pb->protocol_whitelist) {
         s->protocol_whitelist = av_strdup(s->pb->protocol_whitelist);
         if (!s->protocol_whitelist) {
@@ -545,7 +555,7 @@ int avformat_open_input(AVFormatContext **ps, const char *filename,
             goto fail;
         }
     }
-
+	//协议黑名单
     if (!s->protocol_blacklist && s->pb && s->pb->protocol_blacklist) {
         s->protocol_blacklist = av_strdup(s->pb->protocol_blacklist);
         if (!s->protocol_blacklist) {
@@ -559,7 +569,7 @@ int avformat_open_input(AVFormatContext **ps, const char *filename,
         ret = AVERROR(EINVAL);
         goto fail;
     }
-
+	//打开流的时候跳过最初的字节
     avio_skip(s->pb, s->skip_initial_bytes);
 
     /* Check filename in case an image number is expected. */
@@ -569,7 +579,7 @@ int avformat_open_input(AVFormatContext **ps, const char *filename,
             goto fail;
         }
     }
-
+	//把AVFormatContext的duration和start_time置为NOPTS
     s->duration = s->start_time = AV_NOPTS_VALUE;
 
     /* Allocate private data. */
@@ -592,9 +602,12 @@ int avformat_open_input(AVFormatContext **ps, const char *filename,
 
 
     if (!(s->flags&AVFMT_FLAG_PRIV_OPT) && s->iformat->read_header)
+		//在调用完init_input()完成基本的初始化并且推测得到相应的AVInputFormat之后，
+		//avformat_open_input()会调用AVInputFormat的read_header()方法读取媒体文件的文件头并且完成相关的初始化工作
         if ((ret = s->iformat->read_header(s)) < 0)
             goto fail;
-
+	//id3v2信息的处理
+	//如果metadata是空的话
     if (!s->metadata) {
         s->metadata = s->internal->id3v2_meta;
         s->internal->id3v2_meta = NULL;
@@ -608,7 +621,7 @@ int avformat_open_input(AVFormatContext **ps, const char *filename,
             return AVERROR_INVALIDDATA;
     }
 
-    if (id3v2_extra_meta) {
+    if (id3v2_extra_meta) {//如果文件名是mp3 aac 或者 tta
         if (!strcmp(s->iformat->name, "mp3") || !strcmp(s->iformat->name, "aac") ||
             !strcmp(s->iformat->name, "tta")) {
             if ((ret = ff_id3v2_parse_apic(s, &id3v2_extra_meta)) < 0)
@@ -2476,6 +2489,7 @@ int avformat_seek_file(AVFormatContext *s, int stream_index, int64_t min_ts,
 {
     if (min_ts > ts || max_ts < ts)
         return -1;
+	//如果流索引小于-1或者流索引超过获取到的流数量，报错
     if (stream_index < -1 || stream_index >= (int)s->nb_streams)
         return AVERROR(EINVAL);
 
@@ -2545,6 +2559,7 @@ static int has_duration(AVFormatContext *ic)
 {
     int i;
     AVStream *st;
+	
 
     for (i = 0; i < ic->nb_streams; i++) {
         st = ic->streams[i];
@@ -2670,12 +2685,58 @@ static void estimate_timings_from_bit_rate(AVFormatContext *ic)
     int64_t filesize, duration;
     int i, show_warning = 0;
     AVStream *st;
+	
+	av_log(ic, AV_LOG_WARNING,
+				   "hxk-->ic->bit_rate:%lld\n",ic->bit_rate);
+
+	//add by hxk
+	/*
+	if(st->codecpar->codec_id ==  AV_CODEC_ID_AAC){
+		if (ic->bit_rate <= 0) {
+		 	int64_t bit_rate = 0;
+		 	for (i = 0; i < ic->nb_streams; i++) {
+				st = ic->streams[i];
+				
+				av_log(ic, AV_LOG_WARNING,
+					"1hxk-->ic->fra1:%d\n",st->codecpar->block_align);
+				if (st->codecpar->bit_rate <= 0 && st->internal->avctx->bit_rate > 0)
+                st->codecpar->bit_rate = st->internal->avctx->bit_rate;
+            	if (st->codecpar->bit_rate > 0) {
+                if (INT64_MAX - st->codecpar->bit_rate < bit_rate) {
+                    bit_rate = 0;
+                    break;
+                }
+                bit_rate += st->codecpar->bit_rate;
+            } else if (st->codecpar->codec_type == AVMEDIA_TYPE_VIDEO && st->codec_info_nb_frames > 1) {
+                // If we have a videostream with packets but without a bitrate
+                // then consider the sum not known
+                bit_rate = 0;
+                break;
+            }
+			
+		 	}
+			   
+		 	duration = st->nb_frames * (1024 * 1000000ll + (st->codecpar->sample_rate - 1)) / st->codecpar->sample_rate;
+			//duration = av_rescale(duration, st->time_base.den, (int64_t) st->time_base.num);
+            st->duration = duration;
+            show_warning = 1;
+		 	ic->bit_rate = bit_rate;
+			av_log(ic, AV_LOG_WARNING,
+					"1hxk-->ic->fra:%lld\n",st->nb_frames);
+		 	av_log(ic, AV_LOG_WARNING,
+					"1hxk-->ic->bit_rate:%lld\n",ic->bit_rate);
+	  }
+	}
+*/
+
+	//add end
 
     /* if bit_rate is already set, we believe it */
     if (ic->bit_rate <= 0) {
         int64_t bit_rate = 0;
         for (i = 0; i < ic->nb_streams; i++) {
             st = ic->streams[i];
+			
             if (st->codecpar->bit_rate <= 0 && st->internal->avctx->bit_rate > 0)
                 st->codecpar->bit_rate = st->internal->avctx->bit_rate;
             if (st->codecpar->bit_rate > 0) {
@@ -2692,12 +2753,18 @@ static void estimate_timings_from_bit_rate(AVFormatContext *ic)
             }
         }
         ic->bit_rate = bit_rate;
+		av_log(ic, AV_LOG_WARNING,
+				   "hxk-->ic->bit_rate:%lld\n",ic->bit_rate);
     }
 
     /* if duration is already set, we believe it */
+	av_log(ic, AV_LOG_WARNING,
+               "hxk-->ic->duration:%lld\n",ic->duration);
     if (ic->duration == AV_NOPTS_VALUE &&
         ic->bit_rate != 0) {
         filesize = ic->pb ? avio_size(ic->pb) : 0;
+		av_log(ic, AV_LOG_WARNING,
+               "hxk-->ic->filesize:%lld\n",filesize);
         if (filesize > ic->internal->data_offset) {
             filesize -= ic->internal->data_offset;
             for (i = 0; i < ic->nb_streams; i++) {
@@ -2708,6 +2775,8 @@ static void estimate_timings_from_bit_rate(AVFormatContext *ic)
                                           ic->bit_rate *
                                           (int64_t) st->time_base.num);
                     st->duration = duration;
+					av_log(ic, AV_LOG_WARNING,
+               "hxk-->ic->1duration:%lld\n",ic->duration);
                     show_warning = 1;
                 }
             }
@@ -2859,6 +2928,9 @@ static void estimate_timings(AVFormatContext *ic, int64_t old_offset)
         file_size = avio_size(ic->pb);
         file_size = FFMAX(0, file_size);
     }
+	av_log(ic, AV_LOG_WARNING, "hxk->ic->iformat->name:%s\n", ic->iformat->name);
+	av_log(ic, AV_LOG_WARNING, "hxk->file_size:%lld\n", file_size);
+	av_log(ic, AV_LOG_WARNING, "hxk->ic->pb->seekable:%d\n", ic->pb->seekable);
 
     if ((!strcmp(ic->iformat->name, "mpeg") ||
          !strcmp(ic->iformat->name, "mpegts")) &&

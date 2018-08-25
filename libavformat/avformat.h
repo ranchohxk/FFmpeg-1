@@ -457,12 +457,13 @@ struct AVCodecTag;
 
 /**
  * This structure contains the data a format has to probe a file.
+ * 这个结构体包含探测文件的data数据
  */
 typedef struct AVProbeData {
-    const char *filename;
-    unsigned char *buf; /**< Buffer must have AVPROBE_PADDING_SIZE of extra allocated bytes filled with zero. */
-    int buf_size;       /**< Size of buf except extra allocated bytes */
-    const char *mime_type; /**< mime_type, when known. */
+    const char *filename;//文件路径
+    unsigned char *buf; /**< buf存储用于推测AVInputFormat的媒体数据，其中buf可以为空，但是其后面无论如何都需要填充AVPROBE_PADDING_SIZE个0（AVPROBE_PADDING_SIZE取值为32，即32个0） Buffer must have AVPROBE_PADDING_SIZE of extra allocated bytes filled with zero. */
+    int buf_size;       /**< 推测AVInputFormat的媒体数据的大小Size of buf except extra allocated bytes */
+    const char *mime_type; /**<保存媒体的类型 mime_type, when known. */
 } AVProbeData;
 
 #define AVPROBE_SCORE_RETRY (AVPROBE_SCORE_MAX/4)
@@ -1705,6 +1706,7 @@ typedef struct AVFormatContext {
 
     /**
      * Skip initial bytes when opening stream
+     *跳过最初的字节，当打开流的时候
      * - encoding: unused
      * - decoding: Set by user
      */
@@ -1742,6 +1744,7 @@ typedef struct AVFormatContext {
 
     /**
      * number of bytes to read maximally to identify format.
+     * 读取的字节数最大限度确定的格式
      * - encoding: unused
      * - decoding: set by user
      */

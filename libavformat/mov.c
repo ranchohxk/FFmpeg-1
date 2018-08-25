@@ -5646,7 +5646,7 @@ static int mov_read_default(MOVContext *c, AVIOContext *pb, MOVAtom atom)
     int64_t total_size = 0;
     MOVAtom a;
     int i;
-
+    //如果atom_depth大于10，则直接报数据错误退出
     if (c->atom_depth > 10) {
         av_log(c->fc, AV_LOG_ERROR, "Atoms too deeply nested\n");
         return AVERROR_INVALIDDATA;
@@ -5762,6 +5762,9 @@ static int mov_read_default(MOVContext *c, AVIOContext *pb, MOVAtom atom)
     return 0;
 }
 
+/*
+*文件探测函数
+*/
 static int mov_probe(AVProbeData *p)
 {
     int64_t offset;
@@ -5773,11 +5776,12 @@ static int mov_probe(AVProbeData *p)
     offset = 0;
     for (;;) {
         /* ignore invalid offset */
-        if ((offset + 8) > (unsigned int)p->buf_size)
+        if ((offset + 8) > (unsigned int)p->buf_size)//如果探测数据buf大小小于8的话，直接退出，第一次探测传进来的默认是2048，可以看av_probe_input_buffer2/format.c
             break;
-        tag = AV_RL32(p->buf + offset + 4);
+        tag = AV_RL32(p->buf + offset + 4);//第一次取的时候偏移为0，则从buf指针开始偏移4个字节，后面再次偏移时加上offset
+        //如果第一次的话，则获得第5个数据到第8个数据，正常的mp4，也就是ftyp头了        
         switch(tag) {
-        /* check for obvious tags */
+        /* 检查tag，check for obvious tags */
         case MKTAG('m','o','o','v'):
             moov_offset = offset + 4;
         case MKTAG('m','d','a','t'):
@@ -5790,12 +5794,17 @@ static int mov_probe(AVProbeData *p)
                  AV_RB64(p->buf+offset + 8) == 0)) {
                 score = FFMAX(score, AVPROBE_SCORE_EXTENSION);
             } else if (tag == MKTAG('f','t','y','p') &&
-                       (   AV_RL32(p->buf + offset + 8) == MKTAG('j','p','2',' ')
+                       (   AV_RL32(p->buf + offset + 8) == MKTAG('j','p','2',' ')//如果第8个字节到第12个字节是jp2_或jpx_，这是什么格式没见过,正常的mp4是isom
                         || AV_RL32(p->buf + offset + 8) == MKTAG('j','p','x',' ')
                     )) {
-                score = FFMAX(score, 5);
-            } else {
-                score = AVPROBE_SCORE_MAX;
+                score = FFMAX(score, 5);//打5分
+            } else {//正常的mp4视频直接进入这里检测
+				//hxk 添加测试
+				if(AV_RL32(p->buf + offset + 8) == MKTAG('i','s','o','m')){//获取buf的第8个字节到第12个字节（offset是0）
+					av_log(NULL, AV_LOG_ERROR, "hxk>>>>isom!\n");	  
+				}
+				//添加结束
+                score = AVPROBE_SCORE_MAX;//100分
             }
             offset = FFMAX(4, AV_RB32(p->buf+offset)) + offset;
             break;
@@ -6240,15 +6249,20 @@ fail:
     }
     return ret;
 }
-
+/*
+*文件头读取
+*/
 static int mov_read_header(AVFormatContext *s)
 {
-    MOVContext *mov = s->priv_data;
+    MOVContext *mov = s->priv_data;//priv_data直接指向demux的Context，如MOVContext
     AVIOContext *pb = s->pb;
     int j, err;
-    MOVAtom atom = { AV_RL32("root") };
+	//MOVAtom对应box
+	//每一个box它的头部的8个字节是固定的，前四个字节是这个box的大小，后四个字节是这个box的类型，也就是途中的fytp,moov之类的。这个信息在ffmpeg中使用MOVAtom来标示
+    MOVAtom atom = { AV_RL32("root") };//AV_RL32把字符串组合成int类型
     int i;
-
+	av_log(NULL, AV_LOG_ERROR, "hxk>>>>mov->decryption_key_len:%d\n",mov->decryption_key_len);
+	//不知道这个判断什么的？？？
     if (mov->decryption_key_len != 0 && mov->decryption_key_len != AES_CTR_KEY_SIZE) {
         av_log(s, AV_LOG_ERROR, "Invalid decryption key len %d expected %d\n",
             mov->decryption_key_len, AES_CTR_KEY_SIZE);
@@ -6256,24 +6270,28 @@ static int mov_read_header(AVFormatContext *s)
     }
 
     mov->fc = s;
-    mov->trak_index = -1;
+    mov->trak_index = -1;//当前流的索引
+    av_log(NULL, AV_LOG_ERROR, "hxk>>>>pb->seekable:%d\n",pb->seekable);
     /* .mov and .mp4 aren't streamable anyway (only progressive download if moov is before mdat) */
-    if (pb->seekable & AVIO_SEEKABLE_NORMAL)
-        atom.size = avio_size(pb);
+    if (pb->seekable & AVIO_SEEKABLE_NORMAL) {
+        atom.size = avio_size(pb);//这个atom.size对应哪个呢？
+		av_log(NULL, AV_LOG_ERROR, "hxk>>>>atom.size:%d\n",atom.size);
+    }
     else
         atom.size = INT64_MAX;
-
+	 
     /* check MOV header */
     do {
     if (mov->moov_retry)
-        avio_seek(pb, 0, SEEK_SET);
+        avio_seek(pb, 0, SEEK_SET);//把pb的buf seek到起点
+	//开始遍历box
     if ((err = mov_read_default(mov, pb, atom)) < 0) {
         av_log(s, AV_LOG_ERROR, "error reading header\n");
         mov_read_close(s);
         return err;
     }
     } while ((pb->seekable & AVIO_SEEKABLE_NORMAL) && !mov->found_moov && !mov->moov_retry++);
-    if (!mov->found_moov) {
+    if (!mov->found_moov) {//没有找到moov box，无法播放，返回数据错误
         av_log(s, AV_LOG_ERROR, "moov atom not found\n");
         mov_read_close(s);
         return AVERROR_INVALIDDATA;

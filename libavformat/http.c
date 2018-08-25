@@ -64,8 +64,26 @@ typedef struct HTTPContext {
     unsigned char buffer[BUFFER_SIZE], *buf_ptr, *buf_end;
     int line_count;
     int http_code;
-    /* Used if "Transfer-Encoding: chunked" otherwise -1. */
+    /** 
+    如果使用Transfer-Encoding：chunked，也就是代表这个报文采用了分块编码，不然设置为-1
+	Used if "Transfer-Encoding: chunked" otherwise -1. 
+    分块编码：
+    报文中的实体需要改为用一系列的分块来传输，每个分块包含十六进制的长度值和数据，
+    长度值独占一行，长度不包括它结尾的 CRLF（\r\n），也不包括分块数据结尾的 CRLF。
+    最后一个分块长度值必须为 0，对应的分块数据没有内容，表示实体结束
+    如：服务端
+    	sock.write('HTTP/1.1 200 OK\r\n');
+        sock.write('Transfer-Encoding: chunked\r\n');
+        sock.write('\r\n');
+        sock.write('b\r\n');//指定长度值11
+        sock.write('01234567890\r\n');//数据
+        sock.write('5\r\n');//执行下面长度值5
+        sock.write('12345\r\n');//数据
+        sock.write('0\r\n');//最后一个分块是0
+        sock.write('\r\n');
+    **/
     uint64_t chunksize;
+	//off  buf偏移   end_off->请求头：range的结尾值
     uint64_t off, end_off, filesize;
     char *location;
     HTTPAuthState auth_state;
@@ -78,8 +96,12 @@ typedef struct HTTPContext {
     char *user_agent_deprecated;
 #endif
     char *content_type;
-    /* Set if the server correctly handles Connection: close and will close
-     * the connection after feeding us the content. */
+    /* 
+	如果服务器设置正确处理连接:关闭并将关闭，也就是处理了请求头中的Connetion
+	如果Connection是close的话，处理完后断开连接。willclose设置1，在解析请求头中
+	也就是这个变量代表Connection是否是close　　
+    Set if the server correctly handles Connection: close and will close
+    * the connection after feeding us the content. */
     int willclose;
     int seekable;           /**< Control seekability, 0 = disable, 1 = enable, -1 = probe. */
     int chunked_post;
@@ -105,7 +127,7 @@ typedef struct HTTPContext {
     char *icy_metadata_packet;
     AVDictionary *metadata;
 #if CONFIG_ZLIB
-    int compressed;
+    int compressed;//如果服务器返回客户端的内容正文压缩的话
     z_stream inflate_stream;
     uint8_t *inflate_buffer;
 #endif /* CONFIG_ZLIB */
@@ -131,38 +153,56 @@ typedef struct HTTPContext {
 #define DEFAULT_USER_AGENT "Lavf/" AV_STRINGIFY(LIBAVFORMAT_VERSION)
 
 static const AVOption options[] = {
+	//设置http链接为可seek的操作
     { "seekable", "control seekability of connection", OFFSET(seekable), AV_OPT_TYPE_BOOL, { .i64 = -1 }, -1, 1, D },
-    { "chunked_post", "use chunked transfer-encoding for posts", OFFSET(chunked_post), AV_OPT_TYPE_BOOL, { .i64 = 1 }, 0, 1, E },
-    { "http_proxy", "set HTTP proxy to tunnel through", OFFSET(http_proxy), AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, D | E },
-    { "headers", "set custom HTTP headers, can override built in default headers", OFFSET(headers), AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, D | E },
-    { "content_type", "set a specific content type for the POST messages", OFFSET(content_type), AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, D | E },
-    { "user_agent", "override User-Agent header", OFFSET(user_agent), AV_OPT_TYPE_STRING, { .str = DEFAULT_USER_AGENT }, 0, 0, D },
+	//使用chunked模式post数据
+	{ "chunked_post", "use chunked transfer-encoding for posts", OFFSET(chunked_post), AV_OPT_TYPE_BOOL, { .i64 = 1 }, 0, 1, E },
+	//设置http代理传输数据
+	{ "http_proxy", "set HTTP proxy to tunnel through", OFFSET(http_proxy), AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, D | E },
+	//添加请求头 如：“referer: http://ww.baidu.com”
+	{ "headers", "set custom HTTP headers, can override built in default headers", OFFSET(headers), AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, D | E },
+	//添加post方式请求的类型
+	{ "content_type", "set a specific content type for the POST messages", OFFSET(content_type), AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, D | E },
+	//告诉HTTP服务器， 客户端使用的操作系统和浏览器的名称和版本,例如改成hxk
+	{ "user_agent", "override User-Agent header", OFFSET(user_agent), AV_OPT_TYPE_STRING, { .str = DEFAULT_USER_AGENT }, 0, 0, D },
 #if FF_API_HTTP_USER_AGENT
     { "user-agent", "override User-Agent header", OFFSET(user_agent_deprecated), AV_OPT_TYPE_STRING, { .str = DEFAULT_USER_AGENT }, 0, 0, D },
 #endif
+	//http长连接开启
     { "multiple_requests", "use persistent connections", OFFSET(multiple_requests), AV_OPT_TYPE_BOOL, { .i64 = 0 }, 0, 1, D | E },
-    { "post_data", "set custom HTTP post data", OFFSET(post_data), AV_OPT_TYPE_BINARY, .flags = D | E },
+	//设置将要post的数据
+	{ "post_data", "set custom HTTP post data", OFFSET(post_data), AV_OPT_TYPE_BINARY, .flags = D | E },
     { "mime_type", "export the MIME type", OFFSET(mime_type), AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, AV_OPT_FLAG_EXPORT | AV_OPT_FLAG_READONLY },
-    { "cookies", "set cookies to be sent in applicable future requests, use newline delimited Set-Cookie HTTP field value syntax", OFFSET(cookies), AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, D },
-    { "icy", "request ICY metadata", OFFSET(icy), AV_OPT_TYPE_BOOL, { .i64 = 1 }, 0, 1, D },
+	//设置http请求时写代码的cookies
+	{ "cookies", "set cookies to be sent in applicable future requests, use newline delimited Set-Cookie HTTP field value syntax", OFFSET(cookies), AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, D },
+	//请求ICY元数据，默认打开
+	{ "icy", "request ICY metadata", OFFSET(icy), AV_OPT_TYPE_BOOL, { .i64 = 1 }, 0, 1, D },
     { "icy_metadata_headers", "return ICY metadata headers", OFFSET(icy_metadata_headers), AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, AV_OPT_FLAG_EXPORT },
     { "icy_metadata_packet", "return current ICY metadata packet", OFFSET(icy_metadata_packet), AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, AV_OPT_FLAG_EXPORT },
     { "metadata", "metadata read from the bitstream", OFFSET(metadata), AV_OPT_TYPE_DICT, {0}, 0, 0, AV_OPT_FLAG_EXPORT },
-    { "auth_type", "HTTP authentication type", OFFSET(auth_state.auth_type), AV_OPT_TYPE_INT, { .i64 = HTTP_AUTH_NONE }, HTTP_AUTH_NONE, HTTP_AUTH_BASIC, D | E, "auth_type"},
+	//http验证类型设置
+	{ "auth_type", "HTTP authentication type", OFFSET(auth_state.auth_type), AV_OPT_TYPE_INT, { .i64 = HTTP_AUTH_NONE }, HTTP_AUTH_NONE, HTTP_AUTH_BASIC, D | E, "auth_type"},
     { "none", "No auth method set, autodetect", 0, AV_OPT_TYPE_CONST, { .i64 = HTTP_AUTH_NONE }, 0, 0, D | E, "auth_type"},
     { "basic", "HTTP basic authentication", 0, AV_OPT_TYPE_CONST, { .i64 = HTTP_AUTH_BASIC }, 0, 0, D | E, "auth_type"},
     { "send_expect_100", "Force sending an Expect: 100-continue header for POST", OFFSET(send_expect_100), AV_OPT_TYPE_BOOL, { .i64 = 0 }, 0, 1, E },
     { "location", "The actual location of the data received", OFFSET(location), AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, D | E },
-    { "offset", "initial byte offset", OFFSET(off), AV_OPT_TYPE_INT64, { .i64 = 0 }, 0, INT64_MAX, D },
+	//初始化http请求时的偏移位置
+	{ "offset", "initial byte offset", OFFSET(off), AV_OPT_TYPE_INT64, { .i64 = 0 }, 0, INT64_MAX, D },
     { "end_offset", "try to limit the request to bytes preceding this offset", OFFSET(end_off), AV_OPT_TYPE_INT64, { .i64 = 0 }, 0, INT64_MAX, D },
-    { "method", "Override the HTTP method or set the expected HTTP method from a client", OFFSET(method), AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, D | E },
-    { "reconnect", "auto reconnect after disconnect before EOF", OFFSET(reconnect), AV_OPT_TYPE_BOOL, { .i64 = 0 }, 0, 1, D },
-    { "reconnect_at_eof", "auto reconnect at EOF", OFFSET(reconnect_at_eof), AV_OPT_TYPE_BOOL, { .i64 = 0 }, 0, 1, D },
+	//发起http请求时使用的http的方法
+	{ "method", "Override the HTTP method or set the expected HTTP method from a client", OFFSET(method), AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, D | E },
+	//在eof之前断开发起重连
+	{ "reconnect", "auto reconnect after disconnect before EOF", OFFSET(reconnect), AV_OPT_TYPE_BOOL, { .i64 = 0 }, 0, 1, D },
+	//在得到eof时发起重连
+	{ "reconnect_at_eof", "auto reconnect at EOF", OFFSET(reconnect_at_eof), AV_OPT_TYPE_BOOL, { .i64 = 0 }, 0, 1, D },
     { "reconnect_streamed", "auto reconnect streamed / non seekable streams", OFFSET(reconnect_streamed), AV_OPT_TYPE_BOOL, { .i64 = 0 }, 0, 1, D },
-    { "reconnect_delay_max", "max reconnect delay in seconds after which to give up", OFFSET(reconnect_delay_max), AV_OPT_TYPE_INT, { .i64 = 120 }, 0, UINT_MAX/1000/1000, D },
-    { "listen", "listen on HTTP", OFFSET(listen), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, 2, D | E },
+	//最大重连延时，可以设置10s，如果超过则报IO 错误
+	{ "reconnect_delay_max", "max reconnect delay in seconds after which to give up", OFFSET(reconnect_delay_max), AV_OPT_TYPE_INT, { .i64 = 120 }, 0, UINT_MAX/1000/1000, D },
+	//http 监听模式
+	{ "listen", "listen on HTTP", OFFSET(listen), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, 2, D | E },
     { "resource", "The resource requested by a client", OFFSET(resource), AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, E },
-    { "reply_code", "The http status code to return to a client", OFFSET(reply_code), AV_OPT_TYPE_INT, { .i64 = 200}, INT_MIN, 599, E},
+	//作为http服务时向客户端反馈状态码
+	{ "reply_code", "The http status code to return to a client", OFFSET(reply_code), AV_OPT_TYPE_INT, { .i64 = 200}, INT_MIN, 599, E},
     { NULL }
 };
 
@@ -190,10 +230,11 @@ static int http_open_cnx_internal(URLContext *h, AVDictionary **options)
     char buf[1024], urlbuf[MAX_URL_SIZE];
     int port, use_proxy, err, location_changed = 0;
     HTTPContext *s = h->priv_data;
-
+	//分离url，获取端口  主机名等
     av_url_split(proto, sizeof(proto), auth, sizeof(auth),
                  hostname, sizeof(hostname), &port,
                  path1, sizeof(path1), s->location);
+	
     ff_url_join(hoststr, sizeof(hoststr), NULL, NULL, hostname, port, NULL);
 
     proxy_path = s->http_proxy ? s->http_proxy : getenv("http_proxy");
@@ -206,6 +247,7 @@ static int http_open_cnx_internal(URLContext *h, AVDictionary **options)
         if (port < 0)
             port = 443;
     }
+	//端口号小于0的话，使用80端口
     if (port < 0)
         port = 80;
 
@@ -214,6 +256,7 @@ static int http_open_cnx_internal(URLContext *h, AVDictionary **options)
     else
         path = path1;
     local_path = path;
+	//使用代理
     if (use_proxy) {
         /* Reassemble the request URL without auth string - we don't
          * want to leak the auth to the proxy. */
@@ -225,7 +268,7 @@ static int http_open_cnx_internal(URLContext *h, AVDictionary **options)
     }
 
     ff_url_join(buf, sizeof(buf), lower_proto, NULL, hostname, port, NULL);
-
+	//白名单判断，判断http https是否在白名单中
     if (!s->hd) {
         err = ffurl_open_whitelist(&s->hd, buf, AVIO_FLAG_READ_WRITE,
                                    &h->interrupt_callback, options,
@@ -233,7 +276,7 @@ static int http_open_cnx_internal(URLContext *h, AVDictionary **options)
         if (err < 0)
             return err;
     }
-
+	//建立连接
     err = http_connect(h, path, local_path, hoststr,
                        auth, proxyauth, &location_changed);
     if (err < 0)
@@ -245,7 +288,7 @@ static int http_open_cnx_internal(URLContext *h, AVDictionary **options)
 /* return non zero if error */
 static int http_open_cnx(URLContext *h, AVDictionary **options)
 {
-    HTTPAuthType cur_auth_type, cur_proxy_auth_type;
+    HTTPAuthType cur_auth_type, cur_proxy_auth_type;//http认证类型Http 1.1    Http 1.0
     HTTPContext *s = h->priv_data;
     int location_changed, attempts = 0, redirects = 0;
 redo:
@@ -253,13 +296,15 @@ redo:
 
     cur_auth_type       = s->auth_state.auth_type;
     cur_proxy_auth_type = s->auth_state.auth_type;
-
+    //http  请求处理 处理请求头，确认    ，建立连接
     location_changed = http_open_cnx_internal(h, options);
+	//http 响应头location
     if (location_changed < 0)
         goto fail;
 
     attempts++;
-    if (s->http_code == 401) {
+	//http 响应码
+    if (s->http_code == 401) {//当前请求需要用户验证。该响应必须包含一个适用于被请求资源的 WWW-Authenticate 信息头用以询问用户信息
         if ((cur_auth_type == HTTP_AUTH_NONE || s->auth_state.stale) &&
             s->auth_state.auth_type != HTTP_AUTH_NONE && attempts < 4) {
             ffurl_closep(&s->hd);
@@ -275,19 +320,23 @@ redo:
         } else
             goto fail;
     }
+	//这里看一个遇到的问题，测试用需要认证的网络（也就是wlan wifi需要 portal认证）,然后播放视频发现会一直显示在加载中
+	//我们看一下这里的实现，当使用需要认证的网络去连接时会返回响应头302，同时location改变了
+	//http协议中，返回状态码302表示重定向。
+    //这种情况下，服务器返回的头部信息中会包含一个 Location 字段，内容是重定向到的url
     if ((s->http_code == 301 || s->http_code == 302 ||
          s->http_code == 303 || s->http_code == 307) &&
         location_changed == 1) {
         /* url moved, get next */
-        ffurl_closep(&s->hd);
-        if (redirects++ >= MAX_REDIRECTS)
+        ffurl_closep(&s->hd);//关闭Urlcontext
+        if (redirects++ >= MAX_REDIRECTS)//重连次数，超过的话就会报error
             return AVERROR(EIO);
         /* Restart the authentication process with the new target, which
          * might use a different auth mechanism. */
-        memset(&s->auth_state, 0, sizeof(s->auth_state));
+        memset(&s->auth_state, 0, sizeof(s->auth_state));//auth_state置为0
         attempts         = 0;
         location_changed = 0;
-        goto redo;
+        goto redo;//没超过执行次数，继续重复执行
     }
     return 0;
 
@@ -316,14 +365,16 @@ int ff_http_do_new_request(URLContext *h, const char *uri)
     av_dict_free(&options);
     return ret;
 }
-
+/**
+* 服务器响应错误状态
+**/
 int ff_http_averror(int status_code, int default_averror)
 {
     switch (status_code) {
         case 400: return AVERROR_HTTP_BAD_REQUEST;
         case 401: return AVERROR_HTTP_UNAUTHORIZED;
         case 403: return AVERROR_HTTP_FORBIDDEN;
-        case 404: return AVERROR_HTTP_NOT_FOUND;
+        case 404: return AVERROR_HTTP_NOT_FOUND;//请求失败，请求所希望得到的资源未被在服务器上发现
         default: break;
     }
     if (status_code >= 400 && status_code <= 499)
@@ -414,9 +465,12 @@ static void handle_http_errors(URLContext *h, int error)
     http_write_reply(h, error);
 }
 
+/*
+*握手
+*/
 static int http_handshake(URLContext *c)
 {
-    int ret, err, new_location;
+	int ret, err, new_location;
     HTTPContext *ch = c->priv_data;
     URLContext *cl = ch->hd;
     switch (ch->handshake_step) {
@@ -438,7 +492,7 @@ static int http_handshake(URLContext *c)
         ch->handshake_step = WRITE_REPLY_HEADERS;
         return 1;
     case WRITE_REPLY_HEADERS:
-        av_log(c, AV_LOG_TRACE, "Reply code: %d\n", ch->reply_code);
+        av_log(c, AV_LOG_ERROR, "Reply code: %d\n", ch->reply_code);
         if ((err = http_write_reply(c, ch->reply_code)) < 0)
             return err;
         ch->handshake_step = FINISH;
@@ -481,26 +535,31 @@ fail:
     return ret;
 }
 
+/**
+*http请求头处理 建立连接，处理响应头等
+**/
 static int http_open(URLContext *h, const char *uri, int flags,
                      AVDictionary **options)
 {
-    HTTPContext *s = h->priv_data;
+	HTTPContext *s = h->priv_data;
     int ret;
-
+	
     if( s->seekable == 1 )
         h->is_streamed = 0;
     else
         h->is_streamed = 1;
 
     s->filesize = UINT64_MAX;
+	//url  例如http://videocdn.eebbk.net/a603abd8497654683b9975ad96456b62.avi
     s->location = av_strdup(uri);
     if (!s->location)
         return AVERROR(ENOMEM);
     if (options)
         av_dict_copy(&s->chained_options, *options, 0);
-
+	//请求头
     if (s->headers) {
-        int len = strlen(s->headers);
+        int len = strlen(s->headers);//请求头长度
+        //请求头有问题，请求头最后2个字节判断是不是回车与换行符（见http协议）
         if (len < 2 || strcmp("\r\n", s->headers + len - 2)) {
             av_log(h, AV_LOG_WARNING,
                    "No trailing CRLF found in HTTP header.\n");
@@ -512,16 +571,21 @@ static int http_open(URLContext *h, const char *uri, int flags,
             s->headers[len + 2] = '\0';
         }
     }
-
+	//上层可以设置listen，监听模式？当做服务端？
     if (s->listen) {
         return http_listen(h, uri, flags, options);
     }
+	//http请求头处理 建立连接，处理响应头等
     ret = http_open_cnx(h, options);
     if (ret < 0)
         av_dict_free(&s->chained_options);
     return ret;
 }
 
+
+/**
+*监听模式 等待客户端来连接
+**/
 static int http_accept(URLContext *s, URLContext **c)
 {
     int ret;
@@ -529,7 +593,7 @@ static int http_accept(URLContext *s, URLContext **c)
     HTTPContext *cc;
     URLContext *sl = sc->hd;
     URLContext *cl = NULL;
-
+    //如果没有开启监听，则程序结束
     av_assert0(sc->listen);
     if ((ret = ffurl_alloc(c, s->filename, s->flags, &sl->interrupt_callback)) < 0)
         goto fail;
@@ -538,19 +602,17 @@ static int http_accept(URLContext *s, URLContext **c)
         goto fail;
     cc->hd = cl;
     cc->is_multi_client = 1;
-    return 0;
 fail:
-    if (c) {
-        ffurl_closep(c);
-    }
     return ret;
 }
-
+/**
+*从URLContext获取buffer
+**/
 static int http_getc(HTTPContext *s)
 {
     int len;
     if (s->buf_ptr >= s->buf_end) {
-        len = ffurl_read(s->hd, s->buffer, BUFFER_SIZE);
+        len = ffurl_read(s->hd, s->buffer, BUFFER_SIZE);//4096
         if (len < 0) {
             return len;
         } else if (len == 0) {
@@ -562,7 +624,9 @@ static int http_getc(HTTPContext *s)
     }
     return *s->buf_ptr++;
 }
-
+/**
+*读取一行请求头，置入line中
+**/
 static int http_get_line(HTTPContext *s, char *line, int line_size)
 {
     int ch;
@@ -615,27 +679,38 @@ static int parse_location(HTTPContext *s, const char *p)
     return 0;
 }
 
-/* "bytes $from-$to/$document_size" */
+/** 
+*解析http响应头Content-Range
+*
+*例如：The first :                            1234表示文件大小
+*      Content-Range: bytes 0-699/1234     0-699表示这个返回第0个到第699个字节      
+*	   The second :
+*      Content-Range: bytes 700-1024/1234  700-1024表示这次返回第700到1024个字节
+*"bytes $from-$to/$document_size" 
+*/
 static void parse_content_range(URLContext *h, const char *p)
 {
     HTTPContext *s = h->priv_data;
     const char *slash;
-
+    //如果前6个字节是bytes 
     if (!strncmp(p, "bytes ", 6)) {
         p     += 6;
-        s->off = strtoull(p, NULL, 10);
+        s->off = strtoull(p, NULL, 10);//获取10进制数字，获取byte偏移
+        //查找首次出现/的位置，slash指到/位置，获取文件大小
         if ((slash = strchr(p, '/')) && strlen(slash) > 0)
             s->filesize = strtoull(slash + 1, NULL, 10);
     }
     if (s->seekable == -1 && (!s->is_akamai || s->filesize != 2147483647))
         h->is_streamed = 0; /* we _can_ in fact seek */
 }
-
+/**
+*解析服务器响应头content_encoding,看返回正文的内容有无压缩
+**/
 static int parse_content_encoding(URLContext *h, const char *p)
 {
     if (!av_strncasecmp(p, "gzip", 4) ||
-        !av_strncasecmp(p, "deflate", 7)) {
-#if CONFIG_ZLIB
+        !av_strncasecmp(p, "deflate", 7)) {//如果content_encoding是gzip或者deflate
+#if CONFIG_ZLIB  //如果开启zlib
         HTTPContext *s = h->priv_data;
 
         s->compressed = 1;
@@ -825,7 +900,9 @@ static int cookie_string(AVDictionary *dict, char **cookies)
 
     return 0;
 }
-
+/**
+*每一行的请求头处理
+**/
 static int process_line(URLContext *h, char *line, int line_count,
                         int *new_location)
 {
@@ -841,6 +918,7 @@ static int process_line(URLContext *h, char *line, int line_count,
     }
 
     p = line;
+	//如果请求头行数为0
     if (line_count == 0) {
         if (s->is_connected_server) {
             // HTTP method
@@ -902,7 +980,7 @@ static int process_line(URLContext *h, char *line, int line_count,
             if ((ret = check_http_code(h, s->http_code, end)) < 0)
                 return ret;
         }
-    } else {
+    } else {//如果请求头行数不为0
         while (*p != '\0' && *p != ':')
             p++;
         if (*p != ':')
@@ -911,16 +989,16 @@ static int process_line(URLContext *h, char *line, int line_count,
         *p  = '\0';
         tag = line;
         p++;
-        while (av_isspace(*p))
+        while (av_isspace(*p))//p是转义字符的话就++
             p++;
-        if (!av_strcasecmp(tag, "Location")) {
+        if (!av_strcasecmp(tag, "Location")) {//如果tag是location，取出p
             if ((ret = parse_location(s, p)) < 0)
                 return ret;
             *new_location = 1;
         } else if (!av_strcasecmp(tag, "Content-Length") &&
                    s->filesize == UINT64_MAX) {
             s->filesize = strtoull(p, NULL, 10);
-        } else if (!av_strcasecmp(tag, "Content-Range")) {
+        } else if (!av_strcasecmp(tag, "Content-Range")) {//如果tag是Content-Range，取出p
             parse_content_range(h, p);
         } else if (!av_strcasecmp(tag, "Accept-Ranges") &&
                    !strncmp(p, "bytes", 5) &&
@@ -936,18 +1014,18 @@ static int process_line(URLContext *h, char *line, int line_count,
             ff_http_auth_handle_header(&s->auth_state, tag, p);
         } else if (!av_strcasecmp(tag, "Proxy-Authenticate")) {
             ff_http_auth_handle_header(&s->proxy_auth_state, tag, p);
-        } else if (!av_strcasecmp(tag, "Connection")) {
+        } else if (!av_strcasecmp(tag, "Connection")) {//请求头Connection，
             if (!strcmp(p, "close"))
-                s->willclose = 1;
+                s->willclose = 1;//如果是close的话，变量willclose置1
         } else if (!av_strcasecmp(tag, "Server")) {
             if (!av_strcasecmp(p, "AkamaiGHost")) {
                 s->is_akamai = 1;
             } else if (!av_strncasecmp(p, "MediaGateway", 12)) {
                 s->is_mediagateway = 1;
             }
-        } else if (!av_strcasecmp(tag, "Content-Type")) {
+        } else if (!av_strcasecmp(tag, "Content-Type")) {//如果请求头是Content-Type，取出p
             av_free(s->mime_type);
-            s->mime_type = av_strdup(p);
+            s->mime_type = av_strdup(p);//释放之前的重新获取Content-Type,如这里获取的是video/mp4，赋值给mime_type
         } else if (!av_strcasecmp(tag, "Set-Cookie")) {
             if (parse_cookie(s, p, &s->cookie_dict))
                 av_log(h, AV_LOG_WARNING, "Unable to parse '%s'\n", p);
@@ -1070,6 +1148,9 @@ static inline int has_header(const char *str, const char *header)
     return av_stristart(str, header + 2, NULL) || av_stristr(str, header);
 }
 
+/**
+*请求头读取
+*/
 static int http_read_header(URLContext *h, int *new_location)
 {
     HTTPContext *s = h->priv_data;
@@ -1079,17 +1160,17 @@ static int http_read_header(URLContext *h, int *new_location)
     s->chunksize = UINT64_MAX;
 
     for (;;) {
+		//循环取请求头
         if ((err = http_get_line(s, line, sizeof(line))) < 0)
             return err;
-
-        av_log(h, AV_LOG_TRACE, "header='%s'\n", line);
-
+        av_log(h, AV_LOG_ERROR, "header='%s'\n", line);
+        
         err = process_line(h, line, s->line_count, new_location);
         if (err < 0)
             return err;
         if (err == 0)
             break;
-        s->line_count++;
+        s->line_count++;//请求头行数
     }
 
     if (s->seekable == -1 && s->is_mediagateway && s->filesize == 2000000000)
@@ -1102,6 +1183,9 @@ static int http_read_header(URLContext *h, int *new_location)
     return err;
 }
 
+/**
+*http建立连接
+**/
 static int http_connect(URLContext *h, const char *path, const char *local_path,
                         const char *hoststr, const char *auth,
                         const char *proxyauth, int *new_location)
@@ -1125,17 +1209,18 @@ static int http_connect(URLContext *h, const char *path, const char *local_path,
         post            = 1;
         s->chunked_post = 0;
     }
-
+    //发起http请求时使用的方法判断，检查上层是否设下来指定的method，如果没有的话，根据flag判断是post还是get
     if (s->method)
         method = s->method;
     else
         method = post ? "POST" : "GET";
-
+    //http验证类型设置
     authstr      = ff_http_auth_create_response(&s->auth_state, auth,
                                                 local_path, method);
     proxyauthstr = ff_http_auth_create_response(&s->proxy_auth_state, proxyauth,
                                                 local_path, method);
-    if (post && !s->post_data) {
+	//如果是post方式，且请求正文为空的话
+	if (post && !s->post_data) {
         send_expect_100 = s->send_expect_100;
         /* The user has supplied authentication but we don't know the auth type,
          * send Expect: 100-continue to get the 401 response including the
@@ -1153,11 +1238,13 @@ static int http_connect(URLContext *h, const char *path, const char *local_path,
         s->user_agent = av_strdup(s->user_agent_deprecated);
     }
 #endif
-    /* set default headers if needed */
+    /* 加一些默认的headers set default headers if needed */
+    //检测传进来得s-header中有没有User-Agent请求头，可以让服务器区分客户端
     if (!has_header(s->headers, "\r\nUser-Agent: "))
         len += av_strlcatf(headers + len, sizeof(headers) - len,
                            "User-Agent: %s\r\n", s->user_agent);
-    if (!has_header(s->headers, "\r\nAccept: "))
+     //检测传进来的s-header中有没有Accept,没有的话，直接赋值"Accept: */*\r\n"
+	if (!has_header(s->headers, "\r\nAccept: "))
         len += av_strlcpy(headers + len, "Accept: */*\r\n",
                           sizeof(headers) - len);
     // Note: we send this on purpose even when s->off is 0 when we're probing,
@@ -1172,10 +1259,16 @@ static int http_connect(URLContext *h, const char *path, const char *local_path,
         len += av_strlcpy(headers + len, "\r\n",
                           sizeof(headers) - len);
     }
+	/*
+	*100-continue用于客户端在发送POST数据给服务器前，征询服务器情况，
+	*看服务器是否处理POST的数据，如果不处理，客户端则不上传POST数据，
+	*如果处理，则POST上传数据。
+	*在现实应用中，通过在POST大数据时，才会使用100-continue协议。
+	*/
     if (send_expect_100 && !has_header(s->headers, "\r\nExpect: "))
         len += av_strlcatf(headers + len, sizeof(headers) - len,
                            "Expect: 100-continue\r\n");
-
+    //请求头  是否需要持久连接
     if (!has_header(s->headers, "\r\nConnection: ")) {
         if (s->multiple_requests)
             len += av_strlcpy(headers + len, "Connection: keep-alive\r\n",
@@ -1184,17 +1277,19 @@ static int http_connect(URLContext *h, const char *path, const char *local_path,
             len += av_strlcpy(headers + len, "Connection: close\r\n",
                               sizeof(headers) - len);
     }
-
+	//请求头域名，表示请求的服务器网址
     if (!has_header(s->headers, "\r\nHost: "))
         len += av_strlcatf(headers + len, sizeof(headers) - len,
                            "Host: %s\r\n", hoststr);
+	//这个请求头post方式才有     ，获取请求正文的长度
     if (!has_header(s->headers, "\r\nContent-Length: ") && s->post_data)
         len += av_strlcatf(headers + len, sizeof(headers) - len,
                            "Content-Length: %d\r\n", s->post_datalen);
-
+	//这个请求头post方式才有     ，指明报文主体部分内容属于何种类型，如application/json json数据格式
     if (!has_header(s->headers, "\r\nContent-Type: ") && s->content_type)
         len += av_strlcatf(headers + len, sizeof(headers) - len,
                            "Content-Type: %s\r\n", s->content_type);
+	//请求头中cookies
     if (!has_header(s->headers, "\r\nCookie: ") && s->cookies) {
         char *cookies = NULL;
         if (!get_cookies(s, &cookies, path, hoststr) && cookies) {
@@ -1203,6 +1298,7 @@ static int http_connect(URLContext *h, const char *path, const char *local_path,
             av_free(cookies);
         }
     }
+	//Icy-MetaData 默认是1
     if (!has_header(s->headers, "\r\nIcy-MetaData: ") && s->icy)
         len += av_strlcatf(headers + len, sizeof(headers) - len,
                            "Icy-MetaData: %d\r\n", 1);
@@ -1226,7 +1322,7 @@ static int http_connect(URLContext *h, const char *path, const char *local_path,
              proxyauthstr ? "Proxy-" : "", proxyauthstr ? proxyauthstr : "");
 
     av_log(h, AV_LOG_DEBUG, "request: %s\n", s->buffer);
-
+     //header的内容长度如果超过了定义时的4096个字节，则报错
     if (strlen(headers) + 1 == sizeof(headers) ||
         ret >= sizeof(s->buffer)) {
         av_log(h, AV_LOG_ERROR, "overlong headers\n");
@@ -1237,7 +1333,7 @@ static int http_connect(URLContext *h, const char *path, const char *local_path,
 
     if ((err = ffurl_write(s->hd, s->buffer, strlen(s->buffer))) < 0)
         goto done;
-
+	//post请求需要请求正文，这个提供了option可以供上层直接设下来
     if (s->post_data)
         if ((err = ffurl_write(s->hd, s->post_data, s->post_datalen)) < 0)
             goto done;
@@ -1255,8 +1351,13 @@ static int http_connect(URLContext *h, const char *path, const char *local_path,
 #if CONFIG_ZLIB
     s->compressed       = 0;
 #endif
+    //post方式且没有请求正文,没有使用请求头expect
     if (post && !s->post_data && !send_expect_100) {
-        /* Pretend that it did work. We didn't read any header yet, since
+        /*
+         *假装工作。我们没有阅读任何标题,因为
+　　       *我们仍然发送POST数据,但是代码调用
+　　       *函数将检查http_code后返回。
+         * Pretend that it did work. We didn't read any header yet, since
          * we've still to send the POST data, but the code calling this
          * function will check http_code after we return. */
         s->http_code = 200;
@@ -1279,12 +1380,16 @@ done:
     return err;
 }
 
+/**
+*buf读取
+**/
 static int http_buf_read(URLContext *h, uint8_t *buf, int size)
 {
     HTTPContext *s = h->priv_data;
     int len;
 
     if (s->chunksize != UINT64_MAX) {
+		//如果块大小为0
         if (!s->chunksize) {
             char line[32];
             int err;
@@ -1308,6 +1413,7 @@ static int http_buf_read(URLContext *h, uint8_t *buf, int size)
                 return AVERROR(EINVAL);
             }
         }
+		//取最小值
         size = FFMIN(size, s->chunksize);
     }
 
@@ -1319,10 +1425,14 @@ static int http_buf_read(URLContext *h, uint8_t *buf, int size)
         memcpy(buf, s->buf_ptr, len);
         s->buf_ptr += len;
     } else {
+		/*判断有无s->end_off（请求头中有没有设置range，如果设置的话，结尾就是end_off),
+		没有的话，直接取文件大小作为target_end，文件大小取自解析http响应头Content-Range*/
         uint64_t target_end = s->end_off ? s->end_off : s->filesize;
         if ((!s->willclose || s->chunksize == UINT64_MAX) && s->off >= target_end)
             return AVERROR_EOF;
+		//调用tcp协议的tcp_read()函数读取数据,可以打印s->hd->filename，可以看到tcp://221.228.226.23:80
         len = ffurl_read(s->hd, buf, size);
+		//没有读取到，且偏移没有到最后结束值，则说明流不正常结束了，返回IO错误
         if (!len && (!s->willclose || s->chunksize == UINT64_MAX) && s->off < target_end) {
             av_log(h, AV_LOG_ERROR,
                    "Stream ends prematurely at %"PRIu64", should be %"PRIu64"\n",
@@ -1331,10 +1441,13 @@ static int http_buf_read(URLContext *h, uint8_t *buf, int size)
             return AVERROR(EIO);
         }
     }
+	//读取到buf
     if (len > 0) {
-        s->off += len;
+        s->off += len;//buf偏移+长度
+        //如果chunksize正常
         if (s->chunksize > 0 && s->chunksize != UINT64_MAX) {
             av_assert0(s->chunksize >= len);
+			//chunksize减去这次读取的长度，剩下的继续读
             s->chunksize -= len;
         }
     }
@@ -1376,6 +1489,9 @@ static int http_buf_read_compressed(URLContext *h, uint8_t *buf, int size)
 
 static int64_t http_seek_internal(URLContext *h, int64_t off, int whence, int force_reconnect);
 
+/**
+*流读取
+**/
 static int http_read_stream(URLContext *h, uint8_t *buf, int size)
 {
     HTTPContext *s = h->priv_data;
@@ -1396,10 +1512,11 @@ static int http_read_stream(URLContext *h, uint8_t *buf, int size)
         return http_buf_read_compressed(h, buf, size);
 #endif /* CONFIG_ZLIB */
     read_ret = http_buf_read(h, buf, size);
+//如果没有读到数据，开启了重连，则继续读取数据
     if (   (read_ret  < 0 && s->reconnect        && (!h->is_streamed || s->reconnect_streamed) && s->filesize > 0 && s->off < s->filesize)
         || (read_ret == 0 && s->reconnect_at_eof && (!h->is_streamed || s->reconnect_streamed))) {
         uint64_t target = h->is_streamed ? 0 : s->off;
-
+//重连延时的最大时间检测，上层可以控制开启，例如10s，没有超过最大时间则继续读取buffer，超过延时最大时间，则报IO错误
         if (s->reconnect_delay > s->reconnect_delay_max)
             return AVERROR(EIO);
 
@@ -1411,7 +1528,7 @@ static int http_read_stream(URLContext *h, uint8_t *buf, int size)
             av_log(h, AV_LOG_ERROR, "Failed to reconnect at %"PRIu64".\n", target);
             return read_ret;
         }
-
+//如果开了重连，在这里会继续读取数据
         read_ret = http_buf_read(h, buf, size);
     } else
         s->reconnect_delay = 0;
@@ -1496,11 +1613,12 @@ static int store_icy(URLContext *h, int size)
 
     return FFMIN(size, remaining);
 }
-
+/**
+*流数据读取
+**/
 static int http_read(URLContext *h, uint8_t *buf, int size)
 {
     HTTPContext *s = h->priv_data;
-
     if (s->icy_metaint > 0) {
         size = store_icy(h, size);
         if (size < 0)
@@ -1520,7 +1638,6 @@ static int http_write(URLContext *h, const uint8_t *buf, int size)
     int ret;
     char crlf[] = "\r\n";
     HTTPContext *s = h->priv_data;
-
     if (!s->chunked_post) {
         /* non-chunked data is sent without any special encoding */
         return ffurl_write(s->hd, buf, size);
@@ -1545,7 +1662,6 @@ static int http_shutdown(URLContext *h, int flags)
     int ret = 0;
     char footer[] = "0\r\n\r\n";
     HTTPContext *s = h->priv_data;
-
     /* signal end of chunked encoding if used */
     if (((flags & AVIO_FLAG_WRITE) && s->chunked_post) ||
         ((flags & AVIO_FLAG_READ) && s->chunked_post && s->listen)) {
@@ -1577,6 +1693,12 @@ static int http_close(URLContext *h)
     return ret;
 }
 
+/**
+*seek请求操作
+*   offset 是偏移量
+*   whence 表示开始偏移的位置  （如file的seek表示要从哪个位置开始偏移；0代表从文件开头开始算起，1代表从当前位置开始算起，2代表从文件末尾算起)
+**/
+
 static int64_t http_seek_internal(URLContext *h, int64_t off, int whence, int force_reconnect)
 {
     HTTPContext *s = h->priv_data;
@@ -1585,34 +1707,36 @@ static int64_t http_seek_internal(URLContext *h, int64_t off, int whence, int fo
     uint8_t old_buf[BUFFER_SIZE];
     int old_buf_size, ret;
     AVDictionary *options = NULL;
-
+   //whence等于int最大值的话  返回文件大小
     if (whence == AVSEEK_SIZE)
         return s->filesize;
     else if (!force_reconnect &&
              ((whence == SEEK_CUR && off == 0) ||
-              (whence == SEEK_SET && off == s->off)))
+              (whence == SEEK_SET && off == s->off)))//如果在当前位置，偏移offset为0，直接返回(seek不符合) ；如果在起始位置，请求偏移和已经偏移的位置一样（seek不符合）
         return s->off;
-    else if ((s->filesize == UINT64_MAX && whence == SEEK_END))
+    else if ((s->filesize == UINT64_MAX && whence == SEEK_END))//如果文件大小没获取正确，seek请求结尾位置，抛错
         return AVERROR(ENOSYS);
 
-    if (whence == SEEK_CUR)
-        off += s->off;
+    if (whence == SEEK_CUR)//从当前位置开始seek
+        off += s->off;//偏移为当前偏移位置加上传过来偏移的位置，也就是seek需要偏移的最终位置
     else if (whence == SEEK_END)
         off += s->filesize;
     else if (whence != SEEK_SET)
         return AVERROR(EINVAL);
-    if (off < 0)
+    if (off < 0)  //偏移小于0，直接返回错误
         return AVERROR(EINVAL);
     s->off = off;
 
-    if (s->off && h->is_streamed)
+    if (s->off && h->is_streamed)//如果不能seek
         return AVERROR(ENOSYS);
 
-    /* we save the old context in case the seek fails */
+    /* 保留老的context防止seek失败了we save the old context in case the seek fails */
     old_buf_size = s->buf_end - s->buf_ptr;
     memcpy(old_buf, s->buf_ptr, old_buf_size);
     s->hd = NULL;
 
+	/*如果发送http请求失败了,继续用旧连接*/
+	/*这里继续发送请求头和请求 响应头*/
     /* if it fails, continue on old connection */
     if ((ret = http_open_cnx(h, &options)) < 0) {
         av_dict_free(&options);
@@ -1627,7 +1751,11 @@ static int64_t http_seek_internal(URLContext *h, int64_t off, int whence, int fo
     ffurl_close(old_hd);
     return off;
 }
-
+/**
+*seek请求操作
+*   offset 是偏移量
+*   whence 表示开始偏移的位置  （如file的seek表示要从哪个位置开始偏移；0代表从文件开头开始算起，1代表从当前位置开始算起，2代表从文件末尾算起)
+**/
 static int64_t http_seek(URLContext *h, int64_t off, int whence)
 {
     return http_seek_internal(h, off, whence, 0);

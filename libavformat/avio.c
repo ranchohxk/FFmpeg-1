@@ -70,6 +70,9 @@ const AVClass ffurl_context_class = {
 };
 /*@}*/
 
+/**
+*协议内存申请
+**/
 static int url_alloc_for_protocol(URLContext **puc, const URLProtocol *up,
                                   const char *filename, int flags,
                                   const AVIOInterruptCB *int_cb)
@@ -99,7 +102,7 @@ static int url_alloc_for_protocol(URLContext **puc, const URLProtocol *up,
     uc->av_class = &ffurl_context_class;
     uc->filename = (char *)&uc[1];
     strcpy(uc->filename, filename);
-    uc->prot            = up;
+    uc->prot            = up;//prot字段保存了查找到的协议操作对象指针
     uc->flags           = flags;
     uc->is_streamed     = 0; /* default = not streamed */
     uc->max_packet_size = 0; /* default: stream file */
@@ -163,6 +166,9 @@ fail:
     return err;
 }
 
+/**
+*建立连接，打开协议
+**/
 int ffurl_connect(URLContext *uc, AVDictionary **options)
 {
     int err;
@@ -171,7 +177,7 @@ int ffurl_connect(URLContext *uc, AVDictionary **options)
 
     if (!options)
         options = &tmp_opts;
-
+	//黑名单，白名单检测
     // Check that URLContext was initialized correctly and lists are matching if set
     av_assert0(!(e=av_dict_get(*options, "protocol_whitelist", NULL, 0)) ||
                (uc->protocol_whitelist && !strcmp(uc->protocol_whitelist, e->value)));
@@ -201,7 +207,7 @@ int ffurl_connect(URLContext *uc, AVDictionary **options)
         return err;
     if ((err = av_dict_set(options, "protocol_blacklist", uc->protocol_blacklist, 0)) < 0)
         return err;
-
+	//调用port->url_open（也就是协议中的open函数，如http_open,打开了协议
     err =
         uc->prot->url_open2 ? uc->prot->url_open2(uc,
                                                   uc->filename,
@@ -212,9 +218,9 @@ int ffurl_connect(URLContext *uc, AVDictionary **options)
     av_dict_set(options, "protocol_whitelist", NULL, 0);
     av_dict_set(options, "protocol_blacklist", NULL, 0);
 
-    if (err)
+    if (err)//如果协议打开失败了，如http_open打开失败了，直接返回err
         return err;
-    uc->is_connected = 1;
+    uc->is_connected = 1;//设置is_conneced为true，设置协议已经建立连接
     /* We must be careful here as ffurl_seek() could be slow,
      * for example for http */
     if ((uc->flags & AVIO_FLAG_WRITE) || !strcmp(uc->prot->name, "file"))
@@ -248,17 +254,24 @@ int ffurl_handshake(URLContext *c)
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ"                \
     "0123456789+-."
 
+/**
+*协议查找
+**/
 static const struct URLProtocol *url_find_protocol(const char *filename)
 {
     const URLProtocol **protocols;
     char proto_str[128], proto_nested[128], *ptr;
-    size_t proto_len = strspn(filename, URL_SCHEME_CHARS);
+	//可以看到URL_SCHEME_CHARS不包含“:”,所以filename的:前n个字节就是proto_len,如果http，那么就是4
+    size_t proto_len = strspn(filename, URL_SCHEME_CHARS);//从参数s字符串的开头计算连续的字符，而这些字符都完全是accept 所指字符串中的字符。
+                                                          //简单的说，若strspn()返回的数值为n，则代表字符串s 开头连续有n 个字符都是属于字符串accept内的字符。
     int i;
-
+	//如果filename的proto_len字节不是“:”
+	//如果filename的前8个字节是subfile，返回0
+	//返回出现“:”的指针，如果filename+proto_len+1中不存在，则返回NULL
     if (filename[proto_len] != ':' &&
         (strncmp(filename, "subfile,", 8) || !strchr(filename + proto_len + 1, ':')) ||
-        is_dos_path(filename))
-        strcpy(proto_str, "file");
+        is_dos_path(filename))//默认file协议  ？？？这里有个疑问，file：，这个分号呢
+        strcpy(proto_str, "file");//把从src地址开始且含有NULL结束符的字符串复制到以dest开始的地址空间
     else
         av_strlcpy(proto_str, filename,
                    FFMIN(proto_len + 1, sizeof(proto_str)));
@@ -266,11 +279,11 @@ static const struct URLProtocol *url_find_protocol(const char *filename)
     av_strlcpy(proto_nested, proto_str, sizeof(proto_nested));
     if ((ptr = strchr(proto_nested, '+')))
         *ptr = '\0';
-
+	//获取注册中的协议表
     protocols = ffurl_get_protocols(NULL, NULL);
-    if (!protocols)
+    if (!protocols)//如果没有获取到协议表,直接返回null
         return NULL;
-    for (i = 0; protocols[i]; i++) {
+    for (i = 0; protocols[i]; i++) {//循环检测protocols数组中的protocols
             const URLProtocol *up = protocols[i];
         if (!strcmp(proto_str, up->name)) {
             av_freep(&protocols);
@@ -287,23 +300,29 @@ static const struct URLProtocol *url_find_protocol(const char *filename)
     return NULL;
 }
 
+/**
+*协议空间申请与协议查找
+**/
 int ffurl_alloc(URLContext **puc, const char *filename, int flags,
                 const AVIOInterruptCB *int_cb)
 {
     const URLProtocol *p = NULL;
-
+	//查找协议
     p = url_find_protocol(filename);
-    if (p)
+    if (p)//如果找到协议
        return url_alloc_for_protocol(puc, p, filename, flags, int_cb);
 
-    *puc = NULL;
-    if (av_strstart(filename, "https:", NULL))
+    *puc = NULL;//如果没有找到，协议不可用
+    if (av_strstart(filename, "https:", NULL))//如果文件名开头为https，ffmpeg目前不支持https协议，需要自己移植SSL
         av_log(NULL, AV_LOG_WARNING, "https protocol not found, recompile FFmpeg with "
                                      "openssl, gnutls "
                                      "or securetransport enabled.\n");
     return AVERROR_PROTOCOL_NOT_FOUND;
 }
-
+/**
+*按照白名单打开协议
+*申请协议空间与协议查找以及建立连接（调用协议中open函数，如http_open)
+**/
 int ffurl_open_whitelist(URLContext **puc, const char *filename, int flags,
                          const AVIOInterruptCB *int_cb, AVDictionary **options,
                          const char *whitelist, const char* blacklist,
@@ -311,10 +330,11 @@ int ffurl_open_whitelist(URLContext **puc, const char *filename, int flags,
 {
     AVDictionary *tmp_opts = NULL;
     AVDictionaryEntry *e;
+	//协议内存申请以及查找filename中对应的协议
     int ret = ffurl_alloc(puc, filename, flags, int_cb);
     if (ret < 0)
         return ret;
-    if (parent)
+    if (parent)//传递过来的是NULL
         av_opt_copy(*puc, parent);
     if (options &&
         (ret = av_opt_set_dict(*puc, options)) < 0)
@@ -341,7 +361,7 @@ int ffurl_open_whitelist(URLContext **puc, const char *filename, int flags,
 
     if ((ret = av_opt_set_dict(*puc, options)) < 0)
         goto fail;
-
+//建立连接，打开协议（如，调http_open函数）
     ret = ffurl_connect(*puc, options);
 
     if (!ret)
@@ -352,6 +372,10 @@ fail:
     return ret;
 }
 
+/**
+*按照白名单打开协议
+*申请协议空间与协议查找以及建立连接（调用协议中open函数，如http_open)
+**/
 int ffurl_open(URLContext **puc, const char *filename, int flags,
                const AVIOInterruptCB *int_cb, AVDictionary **options)
 {
@@ -371,19 +395,19 @@ static inline int retry_transfer_wrapper(URLContext *h, uint8_t *buf,
 
     len = 0;
     while (len < size_min) {
-        if (ff_check_interrupt(&h->interrupt_callback))
+        if (ff_check_interrupt(&h->interrupt_callback))//中断检查
             return AVERROR_EXIT;
-        ret = transfer_func(h, buf + len, size - len);
-        if (ret == AVERROR(EINTR))
+        ret = transfer_func(h, buf + len, size - len);//调协议的实现，如http协议的http_read
+        if (ret == AVERROR(EINTR))//报错，结束当次循环
             continue;
-        if (h->flags & AVIO_FLAG_NONBLOCK)
+        if (h->flags & AVIO_FLAG_NONBLOCK)//如果是阻塞模式
             return ret;
-        if (ret == AVERROR(EAGAIN)) {
+        if (ret == AVERROR(EAGAIN)) {//如果错误是EAGAIN的话
             ret = 0;
             if (fast_retries) {
                 fast_retries--;
             } else {
-                if (h->rw_timeout) {
+                if (h->rw_timeout) {//超时检测
                     if (!wait_since)
                         wait_since = av_gettime_relative();
                     else if (av_gettime_relative() > wait_since + h->rw_timeout)
@@ -402,11 +426,15 @@ static inline int retry_transfer_wrapper(URLContext *h, uint8_t *buf,
     return len;
 }
 
+/***
+*协议中读函数的封装，最后调用到如，http_read函数
+*
+**/
 int ffurl_read(URLContext *h, unsigned char *buf, int size)
 {
-    if (!(h->flags & AVIO_FLAG_READ))
+    if (!(h->flags & AVIO_FLAG_READ))//如果URLContext的flag不是可读的话，直接报错
         return AVERROR(EIO);
-    return retry_transfer_wrapper(h, buf, size, 1, h->prot->url_read);
+    return retry_transfer_wrapper(h, buf, size, 1, h->prot->url_read);//把协议的url_read作为形参传递，如http的http_read
 }
 
 int ffurl_read_complete(URLContext *h, unsigned char *buf, int size)
@@ -428,14 +456,16 @@ int ffurl_write(URLContext *h, const unsigned char *buf, int size)
                                   (int (*)(struct URLContext *, uint8_t *, int))
                                   h->prot->url_write);
 }
-
+/**
+*URLContext seek，实际就是调用协议的seek实现,如 http协议的 http_seek函数
+**/
 int64_t ffurl_seek(URLContext *h, int64_t pos, int whence)
 {
     int64_t ret;
 
     if (!h->prot->url_seek)
         return AVERROR(ENOSYS);
-    ret = h->prot->url_seek(h, pos, whence & ~AVSEEK_FORCE);
+    ret = h->prot->url_seek(h, pos, whence & ~AVSEEK_FORCE);//调协议中seek函数，如 http协议的 http_seek函数
     return ret;
 }
 

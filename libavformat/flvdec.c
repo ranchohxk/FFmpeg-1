@@ -72,17 +72,29 @@ typedef struct FLVContext {
     AVRational framerate;
 } FLVContext;
 
+/*
+（1）
+
+（2）检查开头3个字符（Signature）是否为“FLV”。
+
+（3）第4个字节（Version）小于5。
+
+（4）第6个字节（Headersize的第1个字节？）为0。
+
+（5）offset取值大于8。
+
+*/
 static int probe(AVProbeData *p, int live)
 {
     const uint8_t *d = p->buf;
-    unsigned offset = AV_RB32(d + 5);
-
+    unsigned offset = AV_RB32(d + 5);//获得第6至第9字节的数据（对应Headersize字段）并且做大小端转换，然后存入offset变量。之所以要进行大小端转换是因为FLV是以“大端”方式存储数据，而操作系统是以“小端”方式存储数据，这一转换主要通过AV_RB32()函数实现。AV_RB32()是一个宏定义，其对应的函数是av_bswap32()。
+//检查开头3个字符（Signature）是否为“FLV”。
     if (d[0] == 'F' &&
         d[1] == 'L' &&
         d[2] == 'V' &&
-        d[3] < 5 && d[5] == 0 &&
-        offset + 100 < p->buf_size &&
-        offset > 8) {
+        d[3] < 5 && d[5] == 0 &&//第4个字节（Version）小于5
+        offset + 100 < p->buf_size &&////第6个字节（Headersize的第1个字节？）为0
+        offset > 8) {//offset取值大于8
         int is_live = !memcmp(d + offset + 40, "NGINX RTMP", 10);
 
         if (live == is_live)
@@ -90,7 +102,7 @@ static int probe(AVProbeData *p, int live)
     }
     return 0;
 }
-
+//flv文件探测
 static int flv_probe(AVProbeData *p)
 {
     return probe(p, 0);

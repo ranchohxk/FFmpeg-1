@@ -120,10 +120,10 @@ const URLProtocol **ffurl_get_protocols(const char *whitelist,
 
     for (i = 0; url_protocols[i]; i++) {
         const URLProtocol *up = url_protocols[i];
-
+		//如果白名单存在，filename中的协议不在白名单中，continue结束本次循环，如果在白名单中，则添加到ret数组中
         if (whitelist && *whitelist && !av_match_name(up->name, whitelist))
             continue;
-        if (blacklist && *blacklist && av_match_name(up->name, blacklist))
+        if (blacklist && *blacklist && av_match_name(up->name, blacklist))//如果黑名单存在，filename中的协议在黑名单中，continue结束本次循环
             continue;
 
         ret[ret_idx++] = up;

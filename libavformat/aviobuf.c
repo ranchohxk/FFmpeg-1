@@ -77,7 +77,7 @@ const AVClass ff_avio_class = {
 
 static void fill_buffer(AVIOContext *s);
 static int url_resetbuf(AVIOContext *s, int flags);
-
+//把传进来的参数(函数指针)指向刚创建的AVIOContext结构体对应的变量(函数指针)中
 int ffio_init_context(AVIOContext *s,
                   unsigned char *buffer,
                   int buffer_size,
@@ -125,7 +125,7 @@ int ffio_init_context(AVIOContext *s,
 
     return 0;
 }
-
+//对AVIOContext赋值，同时把申请到的buffer以及ffurl_read，ffurl_write，ffurl_seek的地址作为入参被传入
 AVIOContext *avio_alloc_context(
                   unsigned char *buffer,
                   int buffer_size,
@@ -135,9 +135,10 @@ AVIOContext *avio_alloc_context(
                   int (*write_packet)(void *opaque, uint8_t *buf, int buf_size),
                   int64_t (*seek)(void *opaque, int64_t offset, int whence))
 {
-    AVIOContext *s = av_mallocz(sizeof(AVIOContext));
+    AVIOContext *s = av_mallocz(sizeof(AVIOContext));//申请AVIOContext内存
     if (!s)
         return NULL;
+	//把传进来的参数(函数指针)指向刚创建的AVIOContext结构体对应的变量(函数指针)中
     ffio_init_context(s, buffer, buffer_size, write_flag, opaque,
                   read_packet, write_packet, seek);
     return s;
@@ -643,6 +644,7 @@ int avio_read(AVIOContext *s, unsigned char *buf, int size)
         len = FFMIN(s->buf_end - s->buf_ptr, size);
         if (len == 0 || s->write_flag) {
             if((s->direct || size > s->buffer_size) && !s->update_checksum) {
+				//绕过缓冲,直接读取数据到缓冲区
                 // bypass the buffer and read data directly into buf
                 if(s->read_packet)
                     len = s->read_packet(s->opaque, buf, size);
@@ -913,6 +915,9 @@ static int64_t io_read_seek(void *opaque, int stream_index, int64_t timestamp, i
     return internal->h->prot->url_read_seek(internal->h, stream_index, timestamp, flags);
 }
 
+/**
+*申请一个AVIOContext对象并赋值
+*/
 int ffio_fdopen(AVIOContext **s, URLContext *h)
 {
     AVIOInternal *internal = NULL;
@@ -925,7 +930,8 @@ int ffio_fdopen(AVIOContext **s, URLContext *h)
     } else {
         buffer_size = IO_BUFFER_SIZE;
     }
-    buffer = av_malloc(buffer_size);
+	//申请了一个读写缓冲buffer(结合文件协议，buffer大小为IO_BUFFER_SIZE)
+    buffer = av_malloc(buffer_size);//buffer_size的值取自哪里？
     if (!buffer)
         return AVERROR(ENOMEM);
 
@@ -934,10 +940,10 @@ int ffio_fdopen(AVIOContext **s, URLContext *h)
         goto fail;
 
     internal->h = h;
-
+    //对AVIOContext赋值，同时把申请到的buffer以及ffurl_read，ffurl_write，ffurl_seek的地址作为入参被传入
     *s = avio_alloc_context(buffer, buffer_size, h->flags & AVIO_FLAG_WRITE,
                             internal, io_read_packet, io_write_packet, io_seek);
-    if (!*s)
+    if (!*s)//创建AVIOContext失败的话，直接报错
         goto fail;
 
     (*s)->protocol_whitelist = av_strdup(h->protocol_whitelist);
@@ -954,15 +960,15 @@ int ffio_fdopen(AVIOContext **s, URLContext *h)
 
     (*s)->seekable = h->is_streamed ? 0 : AVIO_SEEKABLE_NORMAL;
     (*s)->max_packet_size = max_packet_size;
-    (*s)->min_packet_size = h->min_packet_size;
-    if(h->prot) {
-        (*s)->read_pause = io_read_pause;
-        (*s)->read_seek  = io_read_seek;
+    (*s)->min_packet_size = h->min_packet_size;//协议中获取的urlcontext赋值给AVIOContext
+    if(h->prot) {//如果URLProtStruct不为空
+        (*s)->read_pause = io_read_pause;//把ffurl_pause赋值给AVIOContext的read_pause函数
+        (*s)->read_seek  = io_read_seek;//把ffurl_seek赋值给AVIOContext的read_seek函数
 
         if (h->prot->url_read_seek)
             (*s)->seekable |= AVIO_SEEKABLE_TIME;
     }
-    (*s)->short_seek_get = io_short_seek;
+    (*s)->short_seek_get = io_short_seek;//根据协议调用prot(protocol)中的short_seek函数
     (*s)->av_class = &ff_avio_class;
     return 0;
 fail:
@@ -1073,11 +1079,16 @@ int ffio_rewind_with_probe_data(AVIOContext *s, unsigned char **bufp, int buf_si
     return 0;
 }
 
+/**
+*用于打开FFmpeg的输入输出文件,初始化AVIOContext
+**/
 int avio_open(AVIOContext **s, const char *filename, int flags)
 {
     return avio_open2(s, filename, flags, NULL, NULL);
 }
-
+/**
+* 按照协议名单打开协议，并初始化一个AVIOContext并赋值
+**/
 int ffio_open_whitelist(AVIOContext **s, const char *filename, int flags,
                          const AVIOInterruptCB *int_cb, AVDictionary **options,
                          const char *whitelist, const char *blacklist
@@ -1085,17 +1096,32 @@ int ffio_open_whitelist(AVIOContext **s, const char *filename, int flags,
 {
     URLContext *h;
     int err;
-
+    //调用avio.c中的按照白名单打开协议
+    //申请协议空间与协议查找以及建立连接(调用协议中open函数，如http_open)
+    //调用ffurl_open()申请创建了一个URLContext对象并打开了文件（也就是建立连接等）
     err = ffurl_open_whitelist(&h, filename, flags, int_cb, options, whitelist, blacklist, NULL);
     if (err < 0)
         return err;
+	//调用ffio_fdopen()申请一个AVIOContext对象并赋初值(部分初值来自ffurl_open_whitelist中创建的URLContext)
     err = ffio_fdopen(s, h);
-    if (err < 0) {
+    if (err < 0) {//创建失败了，关闭URLContext
         ffurl_close(h);
         return err;
     }
     return 0;
 }
+/**
+*用于打开FFmpeg的输入输出文件,初始化AVIOContext
+s：函数调用成功之后创建的AVIOContext结构体。
+url：输入输出协议的地址（文件也是一种“广义”的协议，对于文件来说就是文件的路径）。
+flags：打开地址的方式。可以选择只读，只写，或者读写。取值如下。
+AVIO_FLAG_READ：只读。
+AVIO_FLAG_WRITE：只写。
+AVIO_FLAG_READ_WRITE：读写。
+int_cb：目前还没有用过。
+options：目前还没有用过。
+
+**/
 
 int avio_open2(AVIOContext **s, const char *filename, int flags,
                const AVIOInterruptCB *int_cb, AVDictionary **options)
