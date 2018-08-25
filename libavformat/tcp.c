@@ -234,10 +234,11 @@ static int tcp_accept(URLContext *s, URLContext **c)
 }
 
 /**
-*buffer读取
+*buffer读取,读取size个字节
 */
 static int tcp_read(URLContext *h, uint8_t *buf, int size)
 {
+	
 	av_log(NULL, AV_LOG_ERROR, "tcp_read!\n");
 
     TCPContext *s = h->priv_data;
