@@ -1,3 +1,5 @@
+it is hxk's ffmpeg
+
 FFmpeg README
 =============
 
