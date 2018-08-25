@@ -70,7 +70,7 @@ static const AVClass tcp_class = {
 /* return non zero if error */
 static int tcp_open(URLContext *h, const char *uri, int flags)
 {
-	av_log(NULL, AV_LOG_ERROR, "tcp_open!\n");
+	//av_log(NULL, AV_LOG_ERROR, "tcp_open!\n");
 	struct addrinfo hints = { 0 }, *ai, *cur_ai;
     int port, fd = -1;
     TCPContext *s = h->priv_data;
@@ -239,7 +239,7 @@ static int tcp_accept(URLContext *s, URLContext **c)
 static int tcp_read(URLContext *h, uint8_t *buf, int size)
 {
 	
-	av_log(NULL, AV_LOG_ERROR, "tcp_read!\n");
+	//av_log(NULL, AV_LOG_ERROR, "hxk>>>>tcp_read:size:%d!\n",size);
 
     TCPContext *s = h->priv_data;
     int ret;
@@ -271,7 +271,7 @@ static int tcp_write(URLContext *h, const uint8_t *buf, int size)
 
 static int tcp_shutdown(URLContext *h, int flags)
 {
-	av_log(NULL, AV_LOG_ERROR, "tcp_shutdown!\n");
+//	av_log(NULL, AV_LOG_ERROR, "tcp_shutdown!\n");
     TCPContext *s = h->priv_data;
     int how;
 //关闭sockfd的读写功能
@@ -289,7 +289,7 @@ static int tcp_shutdown(URLContext *h, int flags)
 
 static int tcp_close(URLContext *h)
 {
-	av_log(NULL, AV_LOG_ERROR, "tcp_close!\n");
+//	av_log(NULL, AV_LOG_ERROR, "tcp_close!\n");
     TCPContext *s = h->priv_data;
 	//关闭套接字
     closesocket(s->fd);
