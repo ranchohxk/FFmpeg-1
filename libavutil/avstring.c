@@ -340,6 +340,9 @@ int av_escape(char **dst, const char *src, const char *special_chars,
     }
 }
 
+/*
+*av_match_name()用于比较两个格式的名称。简单地说就是比较字符串。注意该函数的字符串是不区分大小写的：字符都转换为小写进行比较
+*/
 int av_match_name(const char *name, const char *names)
 {
     const char *p;
