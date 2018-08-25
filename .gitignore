@@ -1,5 +1,14 @@
 *.a
 *.o
+*.mp4
+*.flv
+*.m4a
+*.m4v
+*.avi
+*.3gp
+*.aac
+*.wav
+*.mid
 *.o.*
 *.d
 *.def
