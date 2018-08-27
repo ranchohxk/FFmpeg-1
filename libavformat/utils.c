@@ -2010,14 +2010,14 @@ int ff_index_search_timestamp(const AVIndexEntry *entries, int nb_entries,
     int64_t timestamp;
 
     a = -1;
-    b = nb_entries;
+    b = nb_entries;//关键帧索引个数
 
-    // Optimize appending index entries at the end.
+    // Optimize appending index entries at the end.如果关键帧索引期望时间超过解析获取到的关键帧索引的时间
     if (b && entries[b - 1].timestamp < wanted_timestamp)
-        a = b - 1;
+        a = b - 1;//
 
     while (b - a > 1) {
-        m         = (a + b) >> 1;
+        m         = (a + b) >> 1;//a+b除以2
 
         // Search for the next non-discarded packet.
         while ((entries[m].flags & AVINDEX_DISCARD_FRAME) && m < b && m < nb_entries - 1) {
@@ -3568,6 +3568,7 @@ static int extract_extradata(AVStream *st, AVPacket *pkt)
     return 0;
 }
 
+/***读取一部分视音频数据并且获得一些相关的信息**/
 int avformat_find_stream_info(AVFormatContext *ic, AVDictionary **options)
 {
     int i, count = 0, ret = 0, j;

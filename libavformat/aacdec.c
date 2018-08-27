@@ -211,9 +211,14 @@ static int adts_aac_read_header(AVFormatContext *s)
 			}
 		    // av_log(NULL, AV_LOG_WARNING, "hxk->numFrames:%lld!\n",numFrames);
 			// Round up and get the duration
+			if(sr == 0) {
+				 av_log(NULL, AV_LOG_ERROR, "sr can not be zero!\n");
+				 return AVERROR_INVALIDDATA;
+			}
 			mFrameDurationUs = (1024 * 1000000ll + (sr - 1)) / sr;
 			duration = numFrames * mFrameDurationUs;//us
 			av_log(NULL, AV_LOG_WARNING, "hxk->duration.us:%d!\n",duration);
+			//时间基转换avstream的，us单位(AV_TIME_BASE_Q)转avstream的时间基
 			duration = av_rescale_q(duration,AV_TIME_BASE_Q, st->time_base);
 			st->duration = duration;
 		    //av_log(NULL, AV_LOG_WARNING, "hxk->duration.st_timebase:%d!\n",duration);

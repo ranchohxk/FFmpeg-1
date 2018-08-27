@@ -1,5 +1,8 @@
 it is hxk's ffmpeg
 
+Just for learning
+
+
 FFmpeg README
 =============
 

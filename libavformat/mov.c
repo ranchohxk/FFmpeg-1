@@ -6254,7 +6254,7 @@ fail:
 */
 static int mov_read_header(AVFormatContext *s)
 {
-    MOVContext *mov = s->priv_data;//priv_data直接指向demux的Context，如MOVContext
+    MOVContext *mov = s->priv_data;//AVFormatContext的priv_data直接指向demux的Context，如MOVContext
     AVIOContext *pb = s->pb;
     int j, err;
 	//MOVAtom对应box
