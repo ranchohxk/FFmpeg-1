@@ -561,7 +561,16 @@ fail:
     av_freep(&nal.rbsp_buffer);
     return -1;
 }
-
+//264解析函数
+/*
+（1）如果是第一次解析，则首先调用ff_h264_decode_extradata()解析AVCodecContext的extradata
+	（里面实际上存储了H.264的SPS、PPS）。
+（2）如果传入的flags 中包含PARSER_FLAG_COMPLETE_FRAMES，则说明传入的是完整的一帧数据，不作任何处理；
+	 如果不包含PARSER_FLAG_COMPLETE_FRAMES，则说明传入的不是完整的一帧数据而是任意一段H.264数据，
+	 则需要调用h264_find_frame_end()通过查找“起始码”（0x00000001或者0x000001）的方法，
+	 分离出完整的一帧数据。
+（3）调用parse_nal_units()完成了NALU的解析工作。
+*/
 static int h264_parse(AVCodecParserContext *s,
                       AVCodecContext *avctx,
                       const uint8_t **poutbuf, int *poutbuf_size,
@@ -570,21 +579,26 @@ static int h264_parse(AVCodecParserContext *s,
     H264ParseContext *p = s->priv_data;
     ParseContext *pc = &p->pc;
     int next;
-
+	//如果还没有解析过1帧，就调用这里解析extradata,extradata中包含sps，pps等关键信息
     if (!p->got_first) {
         p->got_first = 1;
         if (avctx->extradata_size) {
+			//解析AVCodecContext的extradata
             ff_h264_decode_extradata(avctx->extradata, avctx->extradata_size,
                                      &p->ps, &p->is_avc, &p->nal_length_size,
                                      avctx->err_recognition, avctx);
         }
     }
-
+	//输入的数据是完整的一帧？
+    //这里通过设置flags的PARSER_FLAG_COMPLETE_FRAMES来确定
     if (s->flags & PARSER_FLAG_COMPLETE_FRAMES) {
+		//和缓存大小一样
         next = buf_size;
     } else {
+    	//查找帧结尾（帧开始）位置
+    	//以“起始码”为依据（0x000001或0x00000001）
         next = h264_find_frame_end(p, buf, buf_size, avctx);
-
+		 //组帧
         if (ff_combine_frame(pc, next, &buf, &buf_size) < 0) {
             *poutbuf      = NULL;
             *poutbuf_size = 0;
@@ -596,7 +610,8 @@ static int h264_parse(AVCodecParserContext *s,
             h264_find_frame_end(p, &pc->buffer[pc->last_index + next], -next, avctx); // update state
         }
     }
-
+	//解析NALU，从SPS、PPS、SEI等中获得一些基本信息。
+    //此时buf中存储的是完整的1帧数据
     parse_nal_units(s, avctx, buf, buf_size);
 
     if (avctx->framerate.num)
@@ -634,7 +649,7 @@ static int h264_parse(AVCodecParserContext *s,
                 p->reference_dts = s->dts; // new reference
         }
     }
-
+	 //分割后的帧数据输出至poutbuf
     *poutbuf      = buf;
     *poutbuf_size = buf_size;
     return next;
@@ -676,18 +691,19 @@ static int h264_split(AVCodecContext *avctx,
 
     return 0;
 }
+//264解析器关闭函数
 
 static void h264_close(AVCodecParserContext *s)
 {
     H264ParseContext *p = s->priv_data;
     ParseContext *pc = &p->pc;
 
-    av_freep(&pc->buffer);
+    av_freep(&pc->buffer);//释放H264ParseContext的buffer数据
 
     ff_h264_sei_uninit(&p->sei);
     ff_h264_ps_uninit(&p->ps);
 }
-
+//264解析器初始化函数
 static av_cold int init(AVCodecParserContext *s)
 {
     H264ParseContext *p = s->priv_data;
@@ -697,7 +713,7 @@ static av_cold int init(AVCodecParserContext *s)
     ff_h264dsp_init(&p->h264dsp, 8, 1);
     return 0;
 }
-
+//264解析器
 AVCodecParser ff_h264_parser = {
     .codec_ids      = { AV_CODEC_ID_H264 },
     .priv_data_size = sizeof(H264ParseContext),

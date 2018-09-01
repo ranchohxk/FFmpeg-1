@@ -1055,6 +1055,9 @@ static const AVClass h264_class = {
     .option     = h264_options,
     .version    = LIBAVUTIL_VERSION_INT,
 };
+/**
+*H264½âÂëÆ÷
+**/
 
 AVCodec ff_h264_decoder = {
     .name                  = "h264",

@@ -2012,28 +2012,36 @@ int ff_index_search_timestamp(const AVIndexEntry *entries, int nb_entries,
     a = -1;
     b = nb_entries;//关键帧索引个数
 
-    // Optimize appending index entries at the end.如果关键帧索引期望时间超过解析获取到的关键帧索引的时间
+    // Optimize appending index entries at the end.如果关键帧索引期望时间（see请求的时间）超过解析获取到的关键帧索引的时间
     if (b && entries[b - 1].timestamp < wanted_timestamp)
-        a = b - 1;//
-
+        a = b - 1;//直接把a设置为索引的最大值
+	//二分法来查找最适合的关键帧的索引，如果后面的索引和前面的索引就差1了，跳出while
     while (b - a > 1) {
         m         = (a + b) >> 1;//a+b除以2
 
         // Search for the next non-discarded packet.
-        while ((entries[m].flags & AVINDEX_DISCARD_FRAME) && m < b && m < nb_entries - 1) {
-            m++;
+        //寻找下一个不是丢弃的packet
+        while ((entries[m].flags & AVINDEX_DISCARD_FRAME) && m < b && m < nb_entries - 1) {//如果是需要丢弃的包
+            m++;//
             if (m == b && entries[m].timestamp >= wanted_timestamp) {
                 m = b - 1;
                 break;
             }
         }
-
+          /*************************/
+//		  a            m            b
+//如果b = m,则下一次变成
+//        a      m     b
+//如果a = m,则下一次变成
+//               a  m  b
+//如果下一次b-a大于1了，跳出while循环，再根据flag来选取时间戳
         timestamp = entries[m].timestamp;
         if (timestamp >= wanted_timestamp)
             b = m;
         if (timestamp <= wanted_timestamp)
             a = m;
     }
+	//如果flag是AVSEEK_FLAG_BACKWARD，返回的是前面的关键帧
     m = (flags & AVSEEK_FLAG_BACKWARD) ? a : b;
 
     if (!(flags & AVSEEK_FLAG_ANY))

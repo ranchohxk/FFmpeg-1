@@ -435,7 +435,9 @@ static int decode_extradata_ps_mp4(const uint8_t *buf, int buf_size, H264ParamSe
 
     return 0;
 }
-
+								   
+//extradata解析函数								   
+//最常见的就是解析AVCodecContext的extradata。其中extradata实际上存储的就是SPS、PPS
 int ff_h264_decode_extradata(const uint8_t *data, int size, H264ParamSets *ps,
                              int *is_avc, int *nal_length_size,
                              int err_recognition, void *logctx)
@@ -448,14 +450,18 @@ int ff_h264_decode_extradata(const uint8_t *data, int size, H264ParamSets *ps,
     if (data[0] == 1) {
         int i, cnt, nalsize;
         const uint8_t *p = data;
-
+		//AVC1 描述:H.264 bitstream without start codes.是不带起始码0×00000001的。MKV/MOV/FLV中的H.264属于这种类型
+        //H264 描述:H.264 bitstream with start codes.是带有起始码0×00000001的。MPEGTS中的H.264，或者H.264裸流属于这种类型
         *is_avc = 1;
-
+		//数据量太小
+        //随意测了一个视频
+        //SPS: 30 Byte
+        //PPS: 6 Byte
         if (size < 7) {
             av_log(logctx, AV_LOG_ERROR, "avcC %d too short\n", size);
             return AVERROR_INVALIDDATA;
         }
-
+		 //解码SPS
         // Decode sps from avcC
         cnt = *(p + 5) & 0x1f; // Number of sps
         p  += 6;
