@@ -65,6 +65,21 @@ typedef struct H264ParseContext {
 } H264ParseContext;
 
 
+//查找帧结尾（帧开始）位置
+//
+//几种状态state：
+//2 - 找到1个0
+//1 - 找到2个0
+//0 - 找到大于等于3个0
+//4 - 找到2个0和1个1，即001（即找到了起始码）
+//5 - 找到至少3个0和1个1，即0001等等（即找到了起始码）
+//7 - 初始化状态
+//>=8 - 找到2个Slice Header
+//
+//关于起始码startcode的两种形式：3字节的0x000001和4字节的0x00000001
+//3字节的0x000001只有一种场合下使用，就是一个完整的帧被编为多个slice的时候，
+//包含这些slice的nalu使用3字节起始码。其余场合都是4字节的。
+
 static int h264_find_frame_end(H264ParseContext *p, const uint8_t *buf,
                                int buf_size, void *logctx)
 {
@@ -80,7 +95,21 @@ static int h264_find_frame_end(H264ParseContext *p, const uint8_t *buf,
 
     if (p->is_avc && !p->nal_length_size)
         av_log(logctx, AV_LOG_ERROR, "AVC-parser: nal length size invalid\n");
-
+	
+		//
+	   //每次循环前进1个字节，读取该字节的值
+	   //根据此前的状态state做不同的处理
+	   //state取值为4,5代表找到了起始码
+	   //类似于一个状态机，简单画一下状态转移图：
+	   //							 +-----+
+	   //							 |	   |
+	   //							 v	   |
+	   // 7--(0)-->2--(0)-->1--(0)-->0-(0)-+
+	   // ^ 	   |		|		 |
+	   // | 	  (1)	   (1)		(1)
+	   // | 	   |		|		 |
+	   // +--------+		v		 v
+	   //					4		 5
     for (i = 0; i < buf_size; i++) {
         if (i >= next_avc) {
             int nalsize = 0;
@@ -240,6 +269,12 @@ static int scan_mmco_reset(AVCodecParserContext *s, GetBitContext *gb,
  * @param avctx codec context.
  * @param buf buffer with field/frame data.
  * @param buf_size size of the buffer.
+ （1）对于所有的NALU，都调用ff_h264_decode_nal解析NALU的Header，得到nal_unit_type等信息
+ （2）根据nal_unit_type的不同，调用不同的解析函数进行处理。例如：
+	a)解析SPS的时候调用ff_h264_decode_seq_parameter_set()
+	b)解析PPS的时候调用ff_h264_decode_picture_parameter_set()
+	c)解析SEI的时候调用ff_h264_decode_sei()
+	d)解析IDR Slice / Slice的时候，获取slice_type等一些信息。
  */
 static inline int parse_nal_units(AVCodecParserContext *s,
                                   AVCodecContext *avctx,
@@ -317,17 +352,17 @@ static inline int parse_nal_units(AVCodecParserContext *s,
         nal.type    = get_bits(&nal.gb, 5);
 
         switch (nal.type) {
-        case H264_NAL_SPS:
+        case H264_NAL_SPS://解析sps
             ff_h264_decode_seq_parameter_set(&nal.gb, avctx, &p->ps, 0);
             break;
-        case H264_NAL_PPS:
+        case H264_NAL_PPS://解析pps
             ff_h264_decode_picture_parameter_set(&nal.gb, avctx, &p->ps,
                                                  nal.size_bits);
             break;
-        case H264_NAL_SEI:
+        case H264_NAL_SEI://解析SEI
             ff_h264_sei_decode(&p->sei, &nal.gb, &p->ps, avctx);
             break;
-        case H264_NAL_IDR_SLICE:
+        case H264_NAL_IDR_SLICE://解析IDR
             s->key_frame = 1;
 
             p->poc.prev_frame_num        = 0;
@@ -579,7 +614,7 @@ static int h264_parse(AVCodecParserContext *s,
     H264ParseContext *p = s->priv_data;
     ParseContext *pc = &p->pc;
     int next;
-	//如果还没有解析过1帧，就调用这里解析extradata,extradata中包含sps，pps等关键信息
+	//如果还没有解析过1帧，就调用这里先解析extradata,extradata中包含sps，pps等关键信息
     if (!p->got_first) {
         p->got_first = 1;
         if (avctx->extradata_size) {

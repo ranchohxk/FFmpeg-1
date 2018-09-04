@@ -348,7 +348,7 @@ int ff_h264_init_poc(int pic_field_poc[2], int *pic_poc,
 
     return 0;
 }
-
+//解析sps和pps
 static int decode_extradata_ps(const uint8_t *data, int size, H264ParamSets *ps,
                                int is_avc, void *logctx)
 {
@@ -359,6 +359,7 @@ static int decode_extradata_ps(const uint8_t *data, int size, H264ParamSets *ps,
     if (ret < 0) {
         ret = 0;
         goto fail;
+	
     }
 
     for (i = 0; i < pkt.nb_nals; i++) {
@@ -438,6 +439,12 @@ static int decode_extradata_ps_mp4(const uint8_t *buf, int buf_size, H264ParamSe
 								   
 //extradata解析函数								   
 //最常见的就是解析AVCodecContext的extradata。其中extradata实际上存储的就是SPS、PPS
+/**
+*data extrdata数据
+*size extrdata数据大小
+*关于extrdata的结构可以看我笔记：
+*http://note.youdao.com/noteshare?id=c866e56c02bccf6e59c11ac624bb8c8f&sub=FF0EFE35298649C9AF9A3FA95A3AFCC0
+*/
 int ff_h264_decode_extradata(const uint8_t *data, int size, H264ParamSets *ps,
                              int *is_avc, int *nal_length_size,
                              int err_recognition, void *logctx)
@@ -447,7 +454,7 @@ int ff_h264_decode_extradata(const uint8_t *data, int size, H264ParamSets *ps,
     if (!data || size <= 0)
         return -1;
 
-    if (data[0] == 1) {
+    if (data[0] == 1) {//如果版本号是1
         int i, cnt, nalsize;
         const uint8_t *p = data;
 		//AVC1 描述:H.264 bitstream without start codes.是不带起始码0×00000001的。MKV/MOV/FLV中的H.264属于这种类型
@@ -457,16 +464,16 @@ int ff_h264_decode_extradata(const uint8_t *data, int size, H264ParamSets *ps,
         //随意测了一个视频
         //SPS: 30 Byte
         //PPS: 6 Byte
-        if (size < 7) {
+        if (size < 7) {//如果extrdata的size小于7的话，直接报数据错误退出
             av_log(logctx, AV_LOG_ERROR, "avcC %d too short\n", size);
             return AVERROR_INVALIDDATA;
         }
 		 //解码SPS
         // Decode sps from avcC
-        cnt = *(p + 5) & 0x1f; // Number of sps
+        cnt = *(p + 5) & 0x1f; // Number of sps，第6个字节的低5位sps的个数，一般为1
         p  += 6;
         for (i = 0; i < cnt; i++) {
-            nalsize = AV_RB16(p) + 2;
+            nalsize = AV_RB16(p) + 2;//（sps长度所占2个字节+sps内容）
             if (nalsize > size - (p - data))
                 return AVERROR_INVALIDDATA;
             ret = decode_extradata_ps_mp4(p, nalsize, ps, err_recognition, logctx);
@@ -477,10 +484,11 @@ int ff_h264_decode_extradata(const uint8_t *data, int size, H264ParamSets *ps,
             }
             p += nalsize;
         }
+		//解码pps
         // Decode pps from avcC
-        cnt = *(p++); // Number of pps
+        cnt = *(p++); // Number of pps，pps的个数，一般为1
         for (i = 0; i < cnt; i++) {
-            nalsize = AV_RB16(p) + 2;
+            nalsize = AV_RB16(p) + 2;//（pps长度所占2个字节+pps内容）
             if (nalsize > size - (p - data))
                 return AVERROR_INVALIDDATA;
             ret = decode_extradata_ps_mp4(p, nalsize, ps, err_recognition, logctx);
@@ -492,8 +500,8 @@ int ff_h264_decode_extradata(const uint8_t *data, int size, H264ParamSets *ps,
             p += nalsize;
         }
         // Store right nal length size that will be used to parse all other nals
-        *nal_length_size = (data[4] & 0x03) + 1;
-    } else {
+        *nal_length_size = (data[4] & 0x03) + 1;//获取nalu长度，nalu长度计算方法
+    } else {//如果版本号不是1
         *is_avc = 0;
         ret = decode_extradata_ps(data, size, ps, 0, logctx);
         if (ret < 0)

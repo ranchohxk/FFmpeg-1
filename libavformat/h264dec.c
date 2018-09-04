@@ -27,7 +27,10 @@
 
 #define MAX_SPS_COUNT          32
 #define MAX_PPS_COUNT         256
-
+/***
+*
+*ÂãH264ÎÄ¼þÌ½²â
+*/
 static int h264_probe(AVProbeData *p)
 {
     uint32_t code = -1;

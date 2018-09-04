@@ -329,7 +329,7 @@ void ff_h264_ps_uninit(H264ParamSets *ps)
     ps->pps = NULL;
     ps->sps = NULL;
 }
-
+//解析H.264码流中的SPS
 int ff_h264_decode_seq_parameter_set(GetBitContext *gb, AVCodecContext *avctx,
                                      H264ParamSets *ps, int ignore_truncation)
 {
@@ -351,7 +351,8 @@ int ff_h264_decode_seq_parameter_set(GetBitContext *gb, AVCodecContext *avctx,
         sps->data_size = sizeof(sps->data);
     }
     memcpy(sps->data, gb->buffer, sps->data_size);
-
+	//profile型，8bit
+    //注意get_bits()
     profile_idc           = get_bits(gb, 8);
     constraint_set_flags |= get_bits1(gb) << 0;   // constraint_set0_flag
     constraint_set_flags |= get_bits1(gb) << 1;   // constraint_set1_flag
@@ -360,14 +361,17 @@ int ff_h264_decode_seq_parameter_set(GetBitContext *gb, AVCodecContext *avctx,
     constraint_set_flags |= get_bits1(gb) << 4;   // constraint_set4_flag
     constraint_set_flags |= get_bits1(gb) << 5;   // constraint_set5_flag
     skip_bits(gb, 2);                             // reserved_zero_2bits
+    //level级，8bit
     level_idc = get_bits(gb, 8);
+	//该SPS的ID号，该ID号将被picture引用
+    //注意：get_ue_golomb()
     sps_id    = get_ue_golomb_31(gb);
 
     if (sps_id >= MAX_SPS_COUNT) {
         av_log(avctx, AV_LOG_ERROR, "sps_id %u out of range\n", sps_id);
         goto fail;
     }
-
+	//赋值
     sps->sps_id               = sps_id;
     sps->time_offset_length   = 24;
     sps->profile_idc          = profile_idc;
@@ -379,7 +383,7 @@ int ff_h264_decode_seq_parameter_set(GetBitContext *gb, AVCodecContext *avctx,
     memset(sps->scaling_matrix8, 16, sizeof(sps->scaling_matrix8));
     sps->scaling_matrix_present = 0;
     sps->colorspace = 2; //AVCOL_SPC_UNSPECIFIED
-
+	//Profile对应关系
     if (sps->profile_idc == 100 ||  // High profile
         sps->profile_idc == 110 ||  // High10 profile
         sps->profile_idc == 122 ||  // High422 profile
@@ -391,6 +395,11 @@ int ff_h264_decode_seq_parameter_set(GetBitContext *gb, AVCodecContext *avctx,
         sps->profile_idc == 128 ||  // Multiview High profile (MVC)
         sps->profile_idc == 138 ||  // Multiview Depth High profile (MVCD)
         sps->profile_idc == 144) {  // old High444 profile
+        //色度取样
+    	//0代表单色
+    	//1代表4:2:0
+    	//2代表4:2:2
+    	//3代表4:4:4
         sps->chroma_format_idc = get_ue_golomb_31(gb);
         if (sps->chroma_format_idc > 3U) {
             avpriv_request_sample(avctx, "chroma_format_idc %u",
