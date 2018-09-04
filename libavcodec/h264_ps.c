@@ -353,6 +353,19 @@ int ff_h264_decode_seq_parameter_set(GetBitContext *gb, AVCodecContext *avctx,
     memcpy(sps->data, gb->buffer, sps->data_size);
 	//profile型，8bit
     //注意get_bits()
+    /*
+    标识当前H.264码流的profile。我们知道，H.264中定义了三种常用的档次profile：
+	基准档次：baseline profile;
+	主要档次：main profile;
+	扩展档次：extended profile;
+	在H.264的SPS中，第一个字节表示profile_idc，根据profile_idc的值可以确定码流符合哪一种档次。判断规律为：
+	profile_idc = 66 → baseline profile;
+	profile_idc = 77 → main profile;
+	profile_idc = 88 → extended profile;
+	在新版的标准中，还包括了High、High 10、High 4:2:2、High 4:4:4、High 10 Intra、High 4:2:2 Intra、High 4:4:4 Intra、CAVLC 4:4:4 Intra等，每一种都由不同的profile_idc表示。
+	另外，constraint_set0_flag ~ constraint_set5_flag是在编码的档次方面对码流增加的其他一些额外限制性条件。
+	在我们实验码流中，profile_idc = 0x42 = 66，因此码流的档次为baseline profile。
+    */
     profile_idc           = get_bits(gb, 8);
     constraint_set_flags |= get_bits1(gb) << 0;   // constraint_set0_flag
     constraint_set_flags |= get_bits1(gb) << 1;   // constraint_set1_flag
@@ -362,16 +375,21 @@ int ff_h264_decode_seq_parameter_set(GetBitContext *gb, AVCodecContext *avctx,
     constraint_set_flags |= get_bits1(gb) << 5;   // constraint_set5_flag
     skip_bits(gb, 2);                             // reserved_zero_2bits
     //level级，8bit
+    /*
+    标识当前码流的Level。编码的Level定义了某种条件下的最大视频分辨率、最大视频帧率等参数，
+    码流所遵从的level由level_idc指定。
+	当前码流中，level_idc = 0x1e = 30，因此码流的级别为3。
+    */
     level_idc = get_bits(gb, 8);
-	//该SPS的ID号，该ID号将被picture引用
     //注意：get_ue_golomb()
+    //表示当前的序列参数集的id。通过该id值，图像参数集pps可以引用其代表的sps中的参数。
     sps_id    = get_ue_golomb_31(gb);
 
     if (sps_id >= MAX_SPS_COUNT) {
         av_log(avctx, AV_LOG_ERROR, "sps_id %u out of range\n", sps_id);
         goto fail;
     }
-	//赋值
+	//解析到的值赋值给SPS结构体
     sps->sps_id               = sps_id;
     sps->time_offset_length   = 24;
     sps->profile_idc          = profile_idc;
@@ -412,7 +430,11 @@ int ff_h264_decode_seq_parameter_set(GetBitContext *gb, AVCodecContext *avctx,
                 goto fail;
             }
         }
+		//bit_depth_luma_minus8
+        //加8之后为亮度颜色深度
+        //该值取值范围应该在0到4之间。即颜色深度支持0-12bit
         sps->bit_depth_luma   = get_ue_golomb(gb) + 8;
+		 //加8之后为色度颜色深度
         sps->bit_depth_chroma = get_ue_golomb(gb) + 8;
         if (sps->bit_depth_chroma != sps->bit_depth_luma) {
             avpriv_request_sample(avctx,
@@ -436,7 +458,12 @@ int ff_h264_decode_seq_parameter_set(GetBitContext *gb, AVCodecContext *avctx,
         sps->bit_depth_luma    = 8;
         sps->bit_depth_chroma  = 8;
     }
-
+   
+	//log2_max_frame_num_minus4为另一个句法元素frame_num服务
+	   //fram_num的解码函数是ue（v），函数中的v 在这里指定：
+	   //	  v = log2_max_frame_num_minus4 + 4
+	   //从另一个角度看，这个句法元素同时也指明了frame_num 的所能达到的最大值：
+	   //	  MaxFrameNum = 2^( log2_max_frame_num_minus4 + 4 )
     log2_max_frame_num_minus4 = get_ue_golomb(gb);
     if (log2_max_frame_num_minus4 < MIN_LOG2_MAX_FRAME_NUM - 4 ||
         log2_max_frame_num_minus4 > MAX_LOG2_MAX_FRAME_NUM - 4) {
@@ -445,10 +472,20 @@ int ff_h264_decode_seq_parameter_set(GetBitContext *gb, AVCodecContext *avctx,
                log2_max_frame_num_minus4);
         goto fail;
     }
+	/*
+	用于计算MaxFrameNum的值。
+	计算公式为MaxFrameNum = 2^(log2_max_frame_num_minus4 + 4)。
+	MaxFrameNum是frame_num的上限值，frame_num是图像序号的一种表示方法，在帧间编码中常用作一种参考帧标记的手段。
+	*/
     sps->log2_max_frame_num = log2_max_frame_num_minus4 + 4;
+		//pic_order_cnt_type 指明了poc (picture order count) 的编码方法
+			//poc标识图像的播放顺序。
+			//由于H.264使用了B帧预测，使得图像的解码顺序并不一定等于播放顺序，但它们之间存在一定的映射关系
+			//poc 可以由frame-num 通过映射关系计算得来，也可以索性由编码器显式地传送。
+			//H.264 中一共定义了三种poc 的编码方法
 
     sps->poc_type = get_ue_golomb_31(gb);
-
+	
     if (sps->poc_type == 0) { // FIXME #define
         unsigned t = get_ue_golomb(gb);
         if (t>12) {
@@ -475,7 +512,9 @@ int ff_h264_decode_seq_parameter_set(GetBitContext *gb, AVCodecContext *avctx,
         av_log(avctx, AV_LOG_ERROR, "illegal POC type %d\n", sps->poc_type);
         goto fail;
     }
-
+	//num_ref_frames 指定参考帧队列可能达到的最大长度，解码器依照这个句法元素的值开辟存储区，
+	//这个存储区用于存放已解码的参考帧，
+	//H.264 规定最多可用16 个参考帧，因此最大值为16。
     sps->ref_frame_count = get_ue_golomb_31(gb);
     if (avctx->codec_tag == MKTAG('S', 'M', 'V', '2'))
         sps->ref_frame_count = FFMAX(2, sps->ref_frame_count);
@@ -485,11 +524,15 @@ int ff_h264_decode_seq_parameter_set(GetBitContext *gb, AVCodecContext *avctx,
         goto fail;
     }
     sps->gaps_in_frame_num_allowed_flag = get_bits1(gb);
+	//加1后为图像宽（以宏块为单位）
+    //以像素为单位图像宽度（亮度）：width=mb_width*16
     sps->mb_width                       = get_ue_golomb(gb) + 1;
+	//加1后为图像高（以宏块为单位）
+    //以像素为单位图像高度（亮度）：height=mb_height*16
     sps->mb_height                      = get_ue_golomb(gb) + 1;
 
     sps->frame_mbs_only_flag = get_bits1(gb);
-
+	//检查一下
     if (sps->mb_height >= INT_MAX / 2U) {
         av_log(avctx, AV_LOG_ERROR, "height overflow\n");
         goto fail;
@@ -516,6 +559,7 @@ int ff_h264_decode_seq_parameter_set(GetBitContext *gb, AVCodecContext *avctx,
         av_log(avctx, AV_LOG_ERROR,
                "MBAFF support not included; enable it at compile-time.\n");
 #endif
+	//裁剪输出
     sps->crop = get_bits1(gb);
     if (sps->crop) {
         unsigned int crop_left   = get_ue_golomb(gb);
@@ -598,6 +642,7 @@ int ff_h264_decode_seq_parameter_set(GetBitContext *gb, AVCodecContext *avctx,
 
     if (avctx->debug & FF_DEBUG_PICT_INFO) {
         static const char csp[4][5] = { "Gray", "420", "422", "444" };
+		 //Debug的时候可以输出一些sps参数信息
         av_log(avctx, AV_LOG_DEBUG,
                "sps:%u profile:%d/%d poc:%d ref:%d %dx%d %s %s crop:%u/%u/%u/%u %s %s %"PRId32"/%"PRId32" b%d reo:%d\n",
                sps_id, sps->profile_idc, sps->level_idc,
@@ -729,12 +774,17 @@ static int more_rbsp_data_in_pps(const SPS *sps, void *logctx)
 
     return 1;
 }
-
+/**
+*解析pps
+**/
 int ff_h264_decode_picture_parameter_set(GetBitContext *gb, AVCodecContext *avctx,
                                          H264ParamSets *ps, int bit_length)
 {
     AVBufferRef *pps_buf;
     const SPS *sps;
+	//获取PPS ID
+	//表示当前PPS的id。某个PPS在码流中会被相应的slice引用，
+	//slice引用PPS的方式就是在Slice header中保存PPS的id值。该值的取值范围为[0,255]。
     unsigned int pps_id = get_ue_golomb(gb);
     PPS *pps;
     int qp_bd_offset;
@@ -749,9 +799,10 @@ int ff_h264_decode_picture_parameter_set(GetBitContext *gb, AVCodecContext *avct
     pps_buf = av_buffer_allocz(sizeof(*pps));
     if (!pps_buf)
         return AVERROR(ENOMEM);
+	//解析后赋值给PPS这个结构体
     pps = (PPS*)pps_buf->data;
 
-    pps->data_size = gb->buffer_end - gb->buffer;
+    pps->data_size = gb->buffer_end - gb->buffer;//pps的datasize
     if (pps->data_size > sizeof(pps->data)) {
         av_log(avctx, AV_LOG_WARNING, "Truncating likely oversized PPS "
                "(%"SIZE_SPECIFIER" > %"SIZE_SPECIFIER")\n",
@@ -759,7 +810,8 @@ int ff_h264_decode_picture_parameter_set(GetBitContext *gb, AVCodecContext *avct
         pps->data_size = sizeof(pps->data);
     }
     memcpy(pps->data, gb->buffer, pps->data_size);
-
+	//该PPS引用的SPS的ID
+	//表示当前PPS所引用的激活的SPS的id。通过这种方式，PPS中也可以取到对应SPS中的参数。该值的取值范围为[0,31]。
     pps->sps_id = get_ue_golomb_31(gb);
     if ((unsigned)pps->sps_id >= MAX_SPS_COUNT ||
         !ps->sps_list[pps->sps_id]) {
@@ -781,7 +833,8 @@ int ff_h264_decode_picture_parameter_set(GetBitContext *gb, AVCodecContext *avct
         ret = AVERROR_PATCHWELCOME;
         goto fail;
     }
-
+	//entropy_coding_mode_flag
+	//0表示熵编码使用CAVLC，1表示熵编码使用CABAC
     pps->cabac             = get_bits1(gb);
     pps->pic_order_present = get_bits1(gb);
     pps->slice_group_count = get_ue_golomb(gb) + 1;
@@ -789,6 +842,11 @@ int ff_h264_decode_picture_parameter_set(GetBitContext *gb, AVCodecContext *avct
         pps->mb_slice_group_map_type = get_ue_golomb(gb);
         av_log(avctx, AV_LOG_ERROR, "FMO not supported\n");
     }
+	 //num_ref_idx_l0_active_minus1 加１后指明目前参考帧队列的长度，即有多少个参考帧
+    //读者可能还记得在SPS中有句法元素num_ref_frames 也是跟参考帧队列有关，它们的区
+    //别是num_ref_frames 指明参考帧队列的最大值， 解码器用它的值来分配内存空间；
+    //num_ref_idx_l0_active_minus1 指明在这个队列中当前实际的、已存在的参考帧数目，这从它的名字
+    //“active”中也可以看出来。
     pps->ref_count[0] = get_ue_golomb(gb) + 1;
     pps->ref_count[1] = get_ue_golomb(gb) + 1;
     if (pps->ref_count[0] - 1 > 32 - 1 || pps->ref_count[1] - 1 > 32 - 1) {
@@ -798,10 +856,13 @@ int ff_h264_decode_picture_parameter_set(GetBitContext *gb, AVCodecContext *avct
     }
 
     qp_bd_offset = 6 * (sps->bit_depth_luma - 8);
-
+	//P Slice 是否使用加权预测？
     pps->weighted_pred                        = get_bits1(gb);
+	 //B Slice 是否使用加权预测？
     pps->weighted_bipred_idc                  = get_bits(gb, 2);
+	  //QP初始值。读取后需要加26
     pps->init_qp                              = get_se_golomb(gb) + 26U + qp_bd_offset;
+	  //SP和SI的QP初始值（没怎么见过这两种帧）
     pps->init_qs                              = get_se_golomb(gb) + 26U + qp_bd_offset;
     pps->chroma_qp_index_offset[0]            = get_se_golomb(gb);
     if (pps->chroma_qp_index_offset[0] < -12 || pps->chroma_qp_index_offset[0] > 12) {
@@ -845,7 +906,7 @@ int ff_h264_decode_picture_parameter_set(GetBitContext *gb, AVCodecContext *avct
 
     if (pps->chroma_qp_index_offset[0] != pps->chroma_qp_index_offset[1])
         pps->chroma_qp_diff = 1;
-
+//开启debug模式，多打印一点pps的log
     if (avctx->debug & FF_DEBUG_PICT_INFO) {
         av_log(avctx, AV_LOG_DEBUG,
                "pps:%u sps:%u %s slice_groups:%d ref:%u/%u %s qp:%d/%d/%d/%d %s %s %s %s\n",

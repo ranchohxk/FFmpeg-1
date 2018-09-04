@@ -34,8 +34,8 @@ enum {
     H264_NAL_DPC             = 4,
     H264_NAL_IDR_SLICE       = 5,
     H264_NAL_SEI             = 6,
-    H264_NAL_SPS             = 7,
-    H264_NAL_PPS             = 8,
+    H264_NAL_SPS             = 7,//7表示sps
+    H264_NAL_PPS             = 8,//8表示pps
     H264_NAL_AUD             = 9,
     H264_NAL_END_SEQUENCE    = 10,
     H264_NAL_END_STREAM      = 11,
