@@ -365,12 +365,12 @@ static int decode_extradata_ps(const uint8_t *data, int size, H264ParamSets *ps,
     for (i = 0; i < pkt.nb_nals; i++) {
         H2645NAL *nal = &pkt.nals[i];
         switch (nal->type) {
-        case H264_NAL_SPS:
+        case H264_NAL_SPS://sps½âÎö
             ret = ff_h264_decode_seq_parameter_set(&nal->gb, logctx, ps, 0);
             if (ret < 0)
                 goto fail;
             break;
-        case H264_NAL_PPS:
+        case H264_NAL_PPS://pps½âÎö
             ret = ff_h264_decode_picture_parameter_set(&nal->gb, logctx, ps,
                                                        nal->size_bits);
             if (ret < 0)
