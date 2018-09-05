@@ -639,11 +639,10 @@ int ff_h264_decode_seq_parameter_set(GetBitContext *gb, AVCodecContext *avctx,
 
     if (!sps->sar.den)
         sps->sar.den = 1;
-
     if (avctx->debug & FF_DEBUG_PICT_INFO) {
         static const char csp[4][5] = { "Gray", "420", "422", "444" };
 		 //Debug的时候可以输出一些sps参数信息
-        av_log(avctx, AV_LOG_DEBUG,
+        av_log(avctx, AV_LOG_ERROR,
                "sps:%u profile:%d/%d poc:%d ref:%d %dx%d %s %s crop:%u/%u/%u/%u %s %s %"PRId32"/%"PRId32" b%d reo:%d\n",
                sps_id, sps->profile_idc, sps->level_idc,
                sps->poc_type,
