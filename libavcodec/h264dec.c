@@ -389,6 +389,10 @@ static av_cold int h264_decode_end(AVCodecContext *avctx)
 
 static AVOnce h264_vlc_init = AV_ONCE_INIT;
 
+/**
+*264解码初始化
+*
+**/
 static av_cold int h264_decode_init(AVCodecContext *avctx)
 {
     H264Context *h = avctx->priv_data;
@@ -465,6 +469,7 @@ static int decode_init_thread_copy(AVCodecContext *avctx)
 #endif
 
 /**
+ * 瞬时解码器刷新
  * instantaneous decoder refresh.
  */
 static void idr(H264Context *h)

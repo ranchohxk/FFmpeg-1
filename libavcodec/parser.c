@@ -247,7 +247,7 @@ void av_parser_close(AVCodecParserContext *s)
         av_free(s);
     }
 }
-
+//ื้ึก
 int ff_combine_frame(ParseContext *pc, int next,
                      const uint8_t **buf, int *buf_size)
 {

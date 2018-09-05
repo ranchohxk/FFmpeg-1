@@ -51,7 +51,7 @@ int ff_startcode_find_candidate_c(const uint8_t *buf, int size)
 #endif
 #endif
     for (; i < size; i++)
-        if (!buf[i])
+        if (!buf[i])//如果buf[i]为0，跳出循环，查找到0，返回0所对应的buffer中的位置i
             break;
     return i;
 }

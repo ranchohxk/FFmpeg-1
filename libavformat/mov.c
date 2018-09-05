@@ -5801,7 +5801,7 @@ static int mov_probe(AVProbeData *p)
             } else {//正常的mp4视频直接进入这里检测
 				//hxk 添加测试
 				if(AV_RL32(p->buf + offset + 8) == MKTAG('i','s','o','m')){//获取buf的第8个字节到第12个字节（offset是0）
-					av_log(NULL, AV_LOG_ERROR, "hxk>>>>isom!\n");	  
+				//	av_log(NULL, AV_LOG_ERROR, "hxk>>>>isom!\n");	  
 				}
 				//添加结束
                 score = AVPROBE_SCORE_MAX;//100分
@@ -6261,7 +6261,7 @@ static int mov_read_header(AVFormatContext *s)
 	//每一个box它的头部的8个字节是固定的，前四个字节是这个box的大小，后四个字节是这个box的类型，也就是途中的fytp,moov之类的。这个信息在ffmpeg中使用MOVAtom来标示
     MOVAtom atom = { AV_RL32("root") };//AV_RL32把字符串组合成int类型
     int i;
-	av_log(NULL, AV_LOG_ERROR, "hxk>>>>mov->decryption_key_len:%d\n",mov->decryption_key_len);
+	//av_log(NULL, AV_LOG_ERROR, "hxk>>>>mov->decryption_key_len:%d\n",mov->decryption_key_len);
 	//不知道这个判断什么的？？？
     if (mov->decryption_key_len != 0 && mov->decryption_key_len != AES_CTR_KEY_SIZE) {
         av_log(s, AV_LOG_ERROR, "Invalid decryption key len %d expected %d\n",
@@ -6271,11 +6271,11 @@ static int mov_read_header(AVFormatContext *s)
 
     mov->fc = s;
     mov->trak_index = -1;//当前流的索引
-    av_log(NULL, AV_LOG_ERROR, "hxk>>>>pb->seekable:%d\n",pb->seekable);
+   // av_log(NULL, AV_LOG_ERROR, "hxk>>>>pb->seekable:%d\n",pb->seekable);
     /* .mov and .mp4 aren't streamable anyway (only progressive download if moov is before mdat) */
     if (pb->seekable & AVIO_SEEKABLE_NORMAL) {
         atom.size = avio_size(pb);//这个atom.size对应哪个呢？
-		av_log(NULL, AV_LOG_ERROR, "hxk>>>>atom.size:%d\n",atom.size);
+	//	av_log(NULL, AV_LOG_ERROR, "hxk>>>>atom.size:%d\n",atom.size);
     }
     else
         atom.size = INT64_MAX;

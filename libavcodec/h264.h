@@ -28,17 +28,17 @@
 
 /* NAL unit types */
 enum {
-    H264_NAL_SLICE           = 1,
-    H264_NAL_DPA             = 2,
-    H264_NAL_DPB             = 3,
-    H264_NAL_DPC             = 4,
-    H264_NAL_IDR_SLICE       = 5,
-    H264_NAL_SEI             = 6,
+    H264_NAL_SLICE           = 1,//	一个非IDR图像的编码条带 
+    H264_NAL_DPA             = 2,//slice A
+    H264_NAL_DPB             = 3,//slice B
+    H264_NAL_DPC             = 4,//slice C
+    H264_NAL_IDR_SLICE       = 5,//IDR图像的slice
+    H264_NAL_SEI             = 6,//6表示sei，辅助增强信息
     H264_NAL_SPS             = 7,//7表示sps
     H264_NAL_PPS             = 8,//8表示pps
-    H264_NAL_AUD             = 9,
-    H264_NAL_END_SEQUENCE    = 10,
-    H264_NAL_END_STREAM      = 11,
+    H264_NAL_AUD             = 9,//访问单元分隔符
+    H264_NAL_END_SEQUENCE    = 10,//序列结束
+    H264_NAL_END_STREAM      = 11,//码流结尾 
     H264_NAL_FILLER_DATA     = 12,
     H264_NAL_SPS_EXT         = 13,
     H264_NAL_AUXILIARY_SLICE = 19,

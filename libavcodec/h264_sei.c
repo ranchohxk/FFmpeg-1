@@ -233,7 +233,7 @@ static int decode_registered_user_data(H264SEIContext *h, GetBitContext *gb,
 
     return 0;
 }
-
+//x264的编码参数信息一般都会存储在USER_DATA_UNREGISTERED
 static int decode_unregistered_user_data(H264SEIUnregistered *h, GetBitContext *gb,
                                          void *logctx, int size)
 {
@@ -249,7 +249,9 @@ static int decode_unregistered_user_data(H264SEIUnregistered *h, GetBitContext *
 
     for (i = 0; i < size + 16; i++)
         user_data[i] = get_bits(gb, 8);
-
+	//user_data内容示例：x264 core 118
+	//int sscanf(const char *buffer,const char *format,[argument ]...);
+	//sscanf会从buffer里读进数据，依照format的格式将数据写入到argument里。
     user_data[i] = 0;
     e = sscanf(user_data + 16, "x264 - core %d", &build);
     if (e == 1 && build > 0)
@@ -395,7 +397,7 @@ static int decode_alternative_transfer(H264SEIAlternativeTransfer *h,
     h->preferred_transfer_characteristics = get_bits(gb, 8);
     return 0;
 }
-
+//SEI补充增强信息单元
 int ff_h264_sei_decode(H264SEIContext *h, GetBitContext *gb,
                        const H264ParamSets *ps, void *logctx)
 {
@@ -433,6 +435,8 @@ int ff_h264_sei_decode(H264SEIContext *h, GetBitContext *gb,
         case H264_SEI_TYPE_USER_DATA_REGISTERED:
             ret = decode_registered_user_data(h, gb, logctx, size);
             break;
+		//x264的编码参数信息一般都会存储在USER_DATA_UNREGISTERED
+        //其他种类的SEI见得很少
         case H264_SEI_TYPE_USER_DATA_UNREGISTERED:
             ret = decode_unregistered_user_data(&h->unregistered, gb, logctx, size);
             break;

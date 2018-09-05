@@ -502,7 +502,7 @@ int ff_h264_decode_extradata(const uint8_t *data, int size, H264ParamSets *ps,
         }
         // Store right nal length size that will be used to parse all other nals
         *nal_length_size = (data[4] & 0x03) + 1;//获取nalu长度，nalu长度计算方法
-    } else {//如果版本号不是1
+    } else {//如果版本号不是1，暂时没遇到，先不看
         *is_avc = 0;
         ret = decode_extradata_ps(data, size, ps, 0, logctx);
         if (ret < 0)

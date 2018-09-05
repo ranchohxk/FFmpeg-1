@@ -2694,8 +2694,7 @@ static void estimate_timings_from_bit_rate(AVFormatContext *ic)
     int i, show_warning = 0;
     AVStream *st;
 	
-	av_log(ic, AV_LOG_WARNING,
-				   "hxk-->ic->bit_rate:%lld\n",ic->bit_rate);
+
 
 	//add by hxk
 	/*
@@ -2761,18 +2760,13 @@ static void estimate_timings_from_bit_rate(AVFormatContext *ic)
             }
         }
         ic->bit_rate = bit_rate;
-		av_log(ic, AV_LOG_WARNING,
-				   "hxk-->ic->bit_rate:%lld\n",ic->bit_rate);
+		
     }
 
     /* if duration is already set, we believe it */
-	av_log(ic, AV_LOG_WARNING,
-               "hxk-->ic->duration:%lld\n",ic->duration);
     if (ic->duration == AV_NOPTS_VALUE &&
         ic->bit_rate != 0) {
         filesize = ic->pb ? avio_size(ic->pb) : 0;
-		av_log(ic, AV_LOG_WARNING,
-               "hxk-->ic->filesize:%lld\n",filesize);
         if (filesize > ic->internal->data_offset) {
             filesize -= ic->internal->data_offset;
             for (i = 0; i < ic->nb_streams; i++) {
@@ -2783,8 +2777,6 @@ static void estimate_timings_from_bit_rate(AVFormatContext *ic)
                                           ic->bit_rate *
                                           (int64_t) st->time_base.num);
                     st->duration = duration;
-					av_log(ic, AV_LOG_WARNING,
-               "hxk-->ic->1duration:%lld\n",ic->duration);
                     show_warning = 1;
                 }
             }
@@ -2936,9 +2928,7 @@ static void estimate_timings(AVFormatContext *ic, int64_t old_offset)
         file_size = avio_size(ic->pb);
         file_size = FFMAX(0, file_size);
     }
-	av_log(ic, AV_LOG_WARNING, "hxk->ic->iformat->name:%s\n", ic->iformat->name);
-	av_log(ic, AV_LOG_WARNING, "hxk->file_size:%lld\n", file_size);
-	av_log(ic, AV_LOG_WARNING, "hxk->ic->pb->seekable:%d\n", ic->pb->seekable);
+	
 
     if ((!strcmp(ic->iformat->name, "mpeg") ||
          !strcmp(ic->iformat->name, "mpegts")) &&
