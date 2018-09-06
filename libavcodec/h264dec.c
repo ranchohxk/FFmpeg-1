@@ -981,6 +981,7 @@ static int h264_decode_frame(AVCodecContext *avctx, void *data,
 {
 	//赋值。buf对应的就是AVPacket的data
 	const uint8_t *buf = avpkt->data;
+	//buf  size就是packet的size大小
     int buf_size       = avpkt->size;
 	//指向AVCodecContext的priv_data
     H264Context *h     = avctx->priv_data;
