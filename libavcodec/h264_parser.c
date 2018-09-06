@@ -280,7 +280,7 @@ static int scan_mmco_reset(AVCodecParserContext *s, GetBitContext *gb,
 
 /**
  * Parse NAL units of found picture and decode some basic information.
- *
+ * 解析NAL单元发现图片和解码的一些基本信息
  * @param s parser context.
  * @param avctx codec context.
  * @param buf buffer with field/frame data.
@@ -479,7 +479,15 @@ static inline int parse_nal_units(AVCodecParserContext *s,
 			//赋值到AVCodecContext的profile和level
             avctx->profile = ff_h264_get_profile(sps);
             avctx->level   = sps->level_idc;
-
+			/**
+			*
+			说明宏块的编码方式。当该标识位为0时，宏块可能为帧编码或场编码；
+			该标识位为1时，所有宏块都采用帧编码。
+			根据该标识位取值不同，PicHeightInMapUnits的含义也不同，为0时表示一场数据按宏块计算的高度，
+			为1时表示一帧数据按宏块计算的高度。
+			按照宏块计算的图像实际高度FrameHeightInMbs的计算方法为：
+			FrameHeightInMbs = ( 2 ? frame_mbs_only_flag ) * PicHeightInMapUnits
+			*/
             if (sps->frame_mbs_only_flag) {
                 p->picture_structure = PICT_FRAME;
             } else {

@@ -305,8 +305,9 @@ static int h264_init_context(AVCodecContext *avctx, H264Context *h)
     int i;
 
     h->avctx                 = avctx;
+	//1代表是YUV420P
     h->cur_chroma_format_idc = -1;
-
+    
     h->width_from_caller     = avctx->width;
     h->height_from_caller    = avctx->height;
 
@@ -323,7 +324,7 @@ static int h264_init_context(AVCodecContext *avctx, H264Context *h)
     h->next_outputed_poc = INT_MIN;
     for (i = 0; i < MAX_DELAYED_PIC_COUNT; i++)
         h->last_pocs[i] = INT_MIN;
-
+	//sei初始化
     ff_h264_sei_uninit(&h->sei);
 
     avctx->chroma_sample_location = AVCHROMA_LOC_LEFT;
@@ -359,7 +360,7 @@ static av_cold int h264_decode_end(AVCodecContext *avctx)
 {
     H264Context *h = avctx->priv_data;
     int i;
-
+	//移除所有参考帧
     ff_h264_remove_all_refs(h);
     ff_h264_free_tables(h);
 
@@ -370,7 +371,7 @@ static av_cold int h264_decode_end(AVCodecContext *avctx)
     memset(h->delayed_pic, 0, sizeof(h->delayed_pic));
 
     h->cur_pic_ptr = NULL;
-
+    //释放结构体等相关内存
     av_freep(&h->slice_ctx);
     h->nb_slice_ctx = 0;
 
@@ -401,7 +402,9 @@ static av_cold int h264_decode_init(AVCodecContext *avctx)
     ret = h264_init_context(avctx, h);
     if (ret < 0)
         return ret;
-
+	//pthread_once 仅执行一次
+	//初始化熵解码器
+	//CAVLC
     ret = ff_thread_once(&h264_vlc_init, ff_h264_decode_init_vlc);
     if (ret != 0) {
         av_log(avctx, AV_LOG_ERROR, "pthread_once has failed.");
@@ -415,7 +418,7 @@ static av_cold int h264_decode_init(AVCodecContext *avctx)
             h->avctx->time_base.num /= 2;
     }
     avctx->ticks_per_frame = 2;
-
+	//AVCodecContext中是否包含extradata？包含的话，则解析
     if (avctx->extradata_size > 0 && avctx->extradata) {
         ret = ff_h264_decode_extradata(avctx->extradata, avctx->extradata_size,
                                        &h->ps, &h->is_avc, &h->nal_length_size,
@@ -972,12 +975,14 @@ static int send_next_delayed_frame(H264Context *h, AVFrame *dst_frame,
 
     return buf_index;
 }
-
+//解码一帧图像数据
 static int h264_decode_frame(AVCodecContext *avctx, void *data,
                              int *got_frame, AVPacket *avpkt)
 {
-    const uint8_t *buf = avpkt->data;
+	//赋值。buf对应的就是AVPacket的data
+	const uint8_t *buf = avpkt->data;
     int buf_size       = avpkt->size;
+	//指向AVCodecContext的priv_data
     H264Context *h     = avctx->priv_data;
     AVFrame *pict      = data;
     int buf_index;
