@@ -3247,7 +3247,7 @@ static void seek_chapter(VideoState *is, int incr)
                                  AV_TIME_BASE_Q), 0, 0);
 }
 
-/* handle an event sent by the GUI */
+/* 处理按键逻辑handle an event sent by the GUI */
 static void event_loop(VideoState *cur_stream)
 {
     SDL_Event event;
@@ -3264,29 +3264,29 @@ static void event_loop(VideoState *cur_stream)
             }
             switch (event.key.keysym.sym) {
             case SDLK_ESCAPE:
-            case SDLK_q:
+            case SDLK_q://退出
                 do_exit(cur_stream);
                 break;
-            case SDLK_f:
+            case SDLK_f://全屏
                 toggle_full_screen(cur_stream);
                 cur_stream->force_refresh = 1;
                 break;
             case SDLK_p:
             case SDLK_SPACE:
-                toggle_pause(cur_stream);
+                toggle_pause(cur_stream);//暂停
                 break;
             case SDLK_m:
                 toggle_mute(cur_stream);
                 break;
             case SDLK_KP_MULTIPLY:
-            case SDLK_0:
+            case SDLK_0://增加音量
                 update_volume(cur_stream, 1, SDL_VOLUME_STEP);
                 break;
             case SDLK_KP_DIVIDE:
             case SDLK_9:
                 update_volume(cur_stream, -1, SDL_VOLUME_STEP);
                 break;
-            case SDLK_s: // S: Step to next frame
+            case SDLK_s: //跳到下一帧 S: Step to next frame
                 step_to_next_frame(cur_stream);
                 break;
             case SDLK_a:
@@ -3330,16 +3330,16 @@ static void event_loop(VideoState *cur_stream)
                 }
                 seek_chapter(cur_stream, -1);
                 break;
-            case SDLK_LEFT:
-                incr = -10.0;
+            case SDLK_LEFT://ffplay左边移动10秒
+               incr = -10.0;
                 goto do_seek;
-            case SDLK_RIGHT:
+            case SDLK_RIGHT://右边移动10秒
                 incr = 10.0;
                 goto do_seek;
-            case SDLK_UP:
+            case SDLK_UP://右边跳转60秒
                 incr = 60.0;
                 goto do_seek;
-            case SDLK_DOWN:
+            case SDLK_DOWN://左边跳转60秒
                 incr = -60.0;
             do_seek:
                     if (seek_by_bytes) {

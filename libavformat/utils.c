@@ -2520,7 +2520,7 @@ int avformat_seek_file(AVFormatContext *s, int stream_index, int64_t min_ts,
                                     AV_ROUND_DOWN | AV_ROUND_PASS_MINMAX);
             stream_index = 0;
         }
-
+		av_log(s, AV_LOG_ERROR,"format name = [%s]\n", s->iformat->name);
         ret = s->iformat->read_seek2(s, stream_index, min_ts,
                                      ts, max_ts, flags);
 
