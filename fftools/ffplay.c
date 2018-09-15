@@ -2555,16 +2555,17 @@ static int stream_component_open(VideoState *is, int stream_index)
 
     if (stream_index < 0 || stream_index >= ic->nb_streams)
         return -1;
-
+	// 创建解码上下文
     avctx = avcodec_alloc_context3(NULL);
     if (!avctx)
         return AVERROR(ENOMEM);
-
+    // 复制上下文参数
     ret = avcodec_parameters_to_context(avctx, ic->streams[stream_index]->codecpar);
     if (ret < 0)
         goto fail;
+	 // 设定时钟基准
     av_codec_set_pkt_timebase(avctx, ic->streams[stream_index]->time_base);
-
+    // 创建解码器
     codec = avcodec_find_decoder(avctx->codec_id);
 
     switch(avctx->codec_type){
@@ -2574,6 +2575,7 @@ static int stream_component_open(VideoState *is, int stream_index)
     }
     if (forced_codec_name)
         codec = avcodec_find_decoder_by_name(forced_codec_name);
+	// 判断是否成功得到解码器
     if (!codec) {
         if (forced_codec_name) av_log(NULL, AV_LOG_WARNING,
                                       "No codec could be found with name '%s'\n", forced_codec_name);
@@ -2742,7 +2744,7 @@ static int read_thread(void *arg)
     SDL_mutex *wait_mutex = SDL_CreateMutex();
     int scan_all_pmts_set = 0;
     int64_t pkt_ts;
-
+	// 创建等待互斥锁
     if (!wait_mutex) {
         av_log(NULL, AV_LOG_FATAL, "SDL_CreateMutex(): %s\n", SDL_GetError());
         ret = AVERROR(ENOMEM);
@@ -2754,19 +2756,21 @@ static int read_thread(void *arg)
     is->last_audio_stream = is->audio_stream = -1;
     is->last_subtitle_stream = is->subtitle_stream = -1;
     is->eof = 0;
-
+	// 创建解复用上下文
     ic = avformat_alloc_context();
     if (!ic) {
         av_log(NULL, AV_LOG_FATAL, "Could not allocate context.\n");
         ret = AVERROR(ENOMEM);
         goto fail;
     }
+	// 设置解复用中断回调
     ic->interrupt_callback.callback = decode_interrupt_cb;
     ic->interrupt_callback.opaque = is;
     if (!av_dict_get(format_opts, "scan_all_pmts", NULL, AV_DICT_MATCH_CASE)) {
         av_dict_set(&format_opts, "scan_all_pmts", "1", AV_DICT_DONT_OVERWRITE);
         scan_all_pmts_set = 1;
     }
+	// 打开文件
     err = avformat_open_input(&ic, is->filename, is->iformat, &format_opts);
     if (err < 0) {
         print_error(is->filename, err);
@@ -2791,7 +2795,7 @@ static int read_thread(void *arg)
     if (find_stream_info) {
         AVDictionary **opts = setup_find_stream_info_opts(ic, codec_opts);
         int orig_nb_streams = ic->nb_streams;
-
+		 // 查找媒体流信息
         err = avformat_find_stream_info(ic, opts);
 
         for (i = 0; i < orig_nb_streams; i++)
@@ -2808,10 +2812,10 @@ static int read_thread(void *arg)
 
     if (ic->pb)
         ic->pb->eof_reached = 0; // FIXME hack, ffplay maybe should not use avio_feof() to test for the end
-
+	// 判断是否以字节方式定位
     if (seek_by_bytes < 0)
         seek_by_bytes = !!(ic->iformat->flags & AVFMT_TS_DISCONT) && strcmp("ogg", ic->iformat->name);
-
+	// // 计算帧的最大显示时长
     is->max_frame_duration = (ic->iformat->flags & AVFMT_TS_DISCONT) ? 10.0 : 3600.0;
 
     if (!window_title && (t = av_dict_get(ic->metadata, "title", NULL, 0)))
@@ -2831,7 +2835,7 @@ static int read_thread(void *arg)
                     is->filename, (double)timestamp / AV_TIME_BASE);
         }
     }
-
+	// 判断是否属于实时流
     is->realtime = is_realtime(ic);
 
     if (show_status)
@@ -2851,17 +2855,19 @@ static int read_thread(void *arg)
             st_index[i] = INT_MAX;
         }
     }
-
+	// 是否禁止视频流
     if (!video_disable)
         st_index[AVMEDIA_TYPE_VIDEO] =
             av_find_best_stream(ic, AVMEDIA_TYPE_VIDEO,
                                 st_index[AVMEDIA_TYPE_VIDEO], -1, NULL, 0);
+	 // 是否禁止音频流
     if (!audio_disable)
         st_index[AVMEDIA_TYPE_AUDIO] =
             av_find_best_stream(ic, AVMEDIA_TYPE_AUDIO,
                                 st_index[AVMEDIA_TYPE_AUDIO],
                                 st_index[AVMEDIA_TYPE_VIDEO],
                                 NULL, 0);
+	//是否禁止音视频流
     if (!video_disable && !subtitle_disable)
         st_index[AVMEDIA_TYPE_SUBTITLE] =
             av_find_best_stream(ic, AVMEDIA_TYPE_SUBTITLE,
@@ -2870,54 +2876,61 @@ static int read_thread(void *arg)
                                  st_index[AVMEDIA_TYPE_AUDIO] :
                                  st_index[AVMEDIA_TYPE_VIDEO]),
                                 NULL, 0);
-
+	// 设置显示模式
     is->show_mode = show_mode;
+	// 判断视频流索引是否存在，用来计算视频的显示区域
     if (st_index[AVMEDIA_TYPE_VIDEO] >= 0) {
         AVStream *st = ic->streams[st_index[AVMEDIA_TYPE_VIDEO]];
         AVCodecParameters *codecpar = st->codecpar;
+		// 计算采样长宽比
         AVRational sar = av_guess_sample_aspect_ratio(ic, st, NULL);
+		// 设置默认的窗口大小
         if (codecpar->width)
             set_default_window_size(codecpar->width, codecpar->height, sar);
     }
 
-    /* open the streams */
+    /* // 打开音频流 open the streams */
     if (st_index[AVMEDIA_TYPE_AUDIO] >= 0) {
         stream_component_open(is, st_index[AVMEDIA_TYPE_AUDIO]);
     }
 
     ret = -1;
+	// 打开视频流
     if (st_index[AVMEDIA_TYPE_VIDEO] >= 0) {
         ret = stream_component_open(is, st_index[AVMEDIA_TYPE_VIDEO]);
     }
+	 // 是否需要重新设置显示模式
     if (is->show_mode == SHOW_MODE_NONE)
         is->show_mode = ret >= 0 ? SHOW_MODE_VIDEO : SHOW_MODE_RDFT;
 
     if (st_index[AVMEDIA_TYPE_SUBTITLE] >= 0) {
         stream_component_open(is, st_index[AVMEDIA_TYPE_SUBTITLE]);
     }
-
+	// 判断音频流或者视频流是否打开了
     if (is->video_stream < 0 && is->audio_stream < 0) {
         av_log(NULL, AV_LOG_FATAL, "Failed to open file '%s' or configure filtergraph\n",
                is->filename);
         ret = -1;
         goto fail;
     }
-
+	 // 如果是实时流，设置无线缓冲区
     if (infinite_buffer < 0 && is->realtime)
         infinite_buffer = 1;
 
     for (;;) {
+		 // 停止播放
         if (is->abort_request)
             break;
+		// 暂停状态
         if (is->paused != is->last_paused) {
             is->last_paused = is->paused;
-            if (is->paused)
+            if (is->paused)// 如果此时处于暂停状态，则停止读文件
                 is->read_pause_return = av_read_pause(ic);
             else
                 av_read_play(ic);
         }
 #if CONFIG_RTSP_DEMUXER || CONFIG_MMSH_PROTOCOL
-        if (is->paused &&
+        if (is->paused && // 如果此时处于暂停状态，并且不是rtsp、mmsh实时流，则延时10毫秒在继续下一轮读操作
                 (!strcmp(ic->iformat->name, "rtsp") ||
                  (ic->pb && !strncmp(input_filename, "mmsh:", 5)))) {
             /* wait 10 ms to avoid trying to get another packet */
@@ -2926,7 +2939,7 @@ static int read_thread(void *arg)
             continue;
         }
 #endif
-        if (is->seek_req) {
+        if (is->seek_req) {// 如果处于定位操作状态，则进入定位操作
             int64_t seek_target = is->seek_pos;
             int64_t seek_min    = is->seek_rel > 0 ? seek_target - is->seek_rel + 2: INT64_MIN;
             int64_t seek_max    = is->seek_rel < 0 ? seek_target - is->seek_rel - 2: INT64_MAX;
@@ -2959,10 +2972,11 @@ static int read_thread(void *arg)
             is->seek_req = 0;
             is->queue_attachments_req = 1;
             is->eof = 0;
-            if (is->paused)
+            if (is->paused)// 如果此时处于暂停状态，则调到下一帧
                 step_to_next_frame(is);
         }
-        if (is->queue_attachments_req) {
+        if (is->queue_attachments_req) {// 附着请求状态
+         // 判断视频流是否存在
             if (is->video_st && is->video_st->disposition & AV_DISPOSITION_ATTACHED_PIC) {
                 AVPacket copy = { 0 };
                 if ((ret = av_packet_ref(&copy, &is->video_st->attached_pic)) < 0)
@@ -2973,7 +2987,7 @@ static int read_thread(void *arg)
             is->queue_attachments_req = 0;
         }
 
-        /* if the queue are full, no need to read more */
+        /*  // 如果队列已满，不需要再继续读了if the queue are full, no need to read more */
         if (infinite_buffer<1 &&
               (is->audioq.size + is->videoq.size + is->subtitleq.size > MAX_QUEUE_SIZE
             || (stream_has_enough_packets(is->audio_st, is->audio_stream, &is->audioq) &&
@@ -2985,6 +2999,7 @@ static int read_thread(void *arg)
             SDL_UnlockMutex(wait_mutex);
             continue;
         }
+		// 如果此时不能处于暂停状态，并且为了播放到结尾了，判断是否需要循环播放。
         if (!is->paused &&
             (!is->audio_st || (is->auddec.finished == is->audioq.serial && frame_queue_nb_remaining(&is->sampq) == 0)) &&
             (!is->video_st || (is->viddec.finished == is->videoq.serial && frame_queue_nb_remaining(&is->pictq) == 0))) {
@@ -2995,8 +3010,10 @@ static int read_thread(void *arg)
                 goto fail;
             }
         }
+		// 读出裸数据包
         ret = av_read_frame(ic, pkt);
         if (ret < 0) {
+			 // 如果没能读出裸数据包，判断是否是结尾
             if ((ret == AVERROR_EOF || avio_feof(ic->pb)) && !is->eof) {
                 if (is->video_stream >= 0)
                     packet_queue_put_nullpacket(&is->videoq, is->video_stream);
@@ -3015,9 +3032,10 @@ static int read_thread(void *arg)
         } else {
             is->eof = 0;
         }
-        /* check if packet is in play range specified by user, then queue, otherwise discard */
+        /* // 计算pkt的pts是否处于播放范围内 check if packet is in play range specified by user, then queue, otherwise discard */
         stream_start_time = ic->streams[pkt->stream_index]->start_time;
         pkt_ts = pkt->pts == AV_NOPTS_VALUE ? pkt->dts : pkt->pts;
+		 // 播放范围内
         pkt_in_play_range = duration == AV_NOPTS_VALUE ||
                 (pkt_ts - (stream_start_time != AV_NOPTS_VALUE ? stream_start_time : 0)) *
                 av_q2d(ic->streams[pkt->stream_index]->time_base) -
@@ -3039,7 +3057,7 @@ static int read_thread(void *arg)
  fail:
     if (ic && !is->ic)
         avformat_close_input(&ic);
-
+	// 如果结果不为0，则发送退出指令
     if (ret != 0) {
         SDL_Event event;
 
@@ -3087,6 +3105,7 @@ static VideoState *stream_open(const char *filename, AVInputFormat *iformat)
     init_clock(&is->audclk, &is->audioq.serial);
     init_clock(&is->extclk, &is->extclk.serial);
     is->audio_clock_serial = -1;
+	//音量初始化
     if (startup_volume < 0)
         av_log(NULL, AV_LOG_WARNING, "-volume=%d < 0, setting to 0\n", startup_volume);
     if (startup_volume > 100)
@@ -3096,6 +3115,7 @@ static VideoState *stream_open(const char *filename, AVInputFormat *iformat)
     is->audio_volume = startup_volume;
     is->muted = 0;
     is->av_sync_type = av_sync_type;
+	//数据读取线程
     is->read_tid     = SDL_CreateThread(read_thread, "read_thread", is);
     if (!is->read_tid) {
         av_log(NULL, AV_LOG_FATAL, "SDL_CreateThread(): %s\n", SDL_GetError());
@@ -3669,7 +3689,7 @@ static int lockmgr(void **mtx, enum AVLockOp op)
    return 1;
 }
 
-/* Called from the main */
+/*ffplay 入口函数 Called from the main */
 int main(int argc, char **argv)
 {
     int flags;
@@ -3678,6 +3698,7 @@ int main(int argc, char **argv)
     init_dynload();
 
     av_log_set_flags(AV_LOG_SKIP_REPEATED);
+	//解析log设置级别
     parse_loglevel(argc, argv, options);
 
     /* register all codecs, demux and protocols */
@@ -3688,6 +3709,7 @@ int main(int argc, char **argv)
     avfilter_register_all();
 #endif
     av_register_all();
+	//网络初始化
     avformat_network_init();
 
     init_opts();
@@ -3698,7 +3720,7 @@ int main(int argc, char **argv)
     show_banner(argc, argv, options);
 
     parse_options(NULL, argc, argv, options, opt_input_file);
-
+    
     if (!input_filename) {
         show_usage();
         av_log(NULL, AV_LOG_FATAL, "An input file must be specified\n");
@@ -3729,12 +3751,12 @@ int main(int argc, char **argv)
 
     SDL_EventState(SDL_SYSWMEVENT, SDL_IGNORE);
     SDL_EventState(SDL_USEREVENT, SDL_IGNORE);
-
+	// 注册锁管理器
     if (av_lockmgr_register(lockmgr)) {
         av_log(NULL, AV_LOG_FATAL, "Could not initialize lock manager!\n");
         do_exit(NULL);
     }
-
+	// 初始化裸数据包
     av_init_packet(&flush_pkt);
     flush_pkt.data = (uint8_t *)&flush_pkt;
 
@@ -3762,13 +3784,13 @@ int main(int argc, char **argv)
             do_exit(NULL);
         }
     }
-
+	 // 打开媒体流
     is = stream_open(input_filename, file_iformat);
     if (!is) {
         av_log(NULL, AV_LOG_FATAL, "Failed to initialize VideoState!\n");
         do_exit(NULL);
     }
-
+	// 事件循环
     event_loop(is);
 
     /* never returns */
