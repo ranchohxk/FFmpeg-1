@@ -158,14 +158,14 @@ static void colored_fputs(int level, int tint, const char *str)
 
     if (level == AV_LOG_INFO/8) local_use_color = 0;
     else                        local_use_color = use_color;
-
+//window端颜色实现
 #if defined(_WIN32) && !defined(__MINGW32CE__) && HAVE_SETCONSOLETEXTATTRIBUTE
     if (local_use_color)
         SetConsoleTextAttribute(con, background | color[level]);
     fputs(str, stderr);
     if (local_use_color)
         SetConsoleTextAttribute(con, attr_orig);
-#else
+#else//linux端颜色实现
     if (local_use_color == 1) {
         fprintf(stderr,
                 "\033[%"PRIu32";3%"PRIu32"m%s\033[0m",
