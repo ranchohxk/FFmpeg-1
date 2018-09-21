@@ -1,7 +1,7 @@
 #!/bin/bash
 make clean
 #这里修改为你的ndk的路径
-export NDK=/data/hxk/software/android-ndk-r10e
+export NDK=/home/hxk/software/android-ndk-r10e
 #注意android-9文件夹的版本号，替换好自己的版本号。下面的路径同理
 export SYSROOT=$NDK/platforms/android-9/arch-arm/
 export TOOLCHAIN=$NDK/toolchains/arm-linux-androideabi-4.9/prebuilt/linux-x86_64

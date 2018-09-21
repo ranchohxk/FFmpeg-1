@@ -2952,8 +2952,8 @@ static int read_thread(void *arg)
                        "%s: error while seeking\n", is->ic->filename);
             } else {
                 if (is->audio_stream >= 0) {
-                    packet_queue_flush(&is->audioq);
-                    packet_queue_put(&is->audioq, &flush_pkt);
+                    packet_queue_flush(&is->audioq);//刷新队列
+                    packet_queue_put(&is->audioq, &flush_pkt);//放数据
                 }
                 if (is->subtitle_stream >= 0) {
                     packet_queue_flush(&is->subtitleq);

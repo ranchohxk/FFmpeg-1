@@ -941,6 +941,7 @@ typedef struct AVStream {
 
     int disposition; /**< AV_DISPOSITION_* bit field */
 
+	//选择哪些数据包可以随意丢弃,不需要多路分配器
     enum AVDiscard discard; ///< Selects which packets can be discarded at will and do not need to be demuxed.
 
     /**

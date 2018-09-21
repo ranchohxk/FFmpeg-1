@@ -6587,7 +6587,8 @@ static int mov_read_packet(AVFormatContext *s, AVPacket *pkt)
     int ret;
     mov->fc = s;
  retry:
-    sample = mov_find_next_sample(s, &st);
+    sample = mov_find_next_sample(s, &st);//获取下一个样本
+	//没有获取到sample
     if (!sample || (mov->next_root_atom && sample->pos > mov->next_root_atom)) {
         if (!mov->next_root_atom)
             return AVERROR_EOF;
@@ -6656,8 +6657,8 @@ static int mov_read_packet(AVFormatContext *s, AVPacket *pkt)
     }
 
     pkt->stream_index = sc->ffindex;
-    pkt->dts = sample->timestamp;
-    if (sample->flags & AVINDEX_DISCARD_FRAME) {
+    pkt->dts = sample->timestamp;//sample的时间戳赋值给packet的dts
+    if (sample->flags & AVINDEX_DISCARD_FRAME) {//sample的flag是丢弃的话，设置packet的flag为丢弃
         pkt->flags |= AV_PKT_FLAG_DISCARD;
     }
     if (sc->ctts_data && sc->ctts_index < sc->ctts_count) {
@@ -6679,6 +6680,7 @@ static int mov_read_packet(AVFormatContext *s, AVPacket *pkt)
     }
     if (st->discard == AVDISCARD_ALL)
         goto retry;
+	//设置packet的flags
     pkt->flags |= sample->flags & AVINDEX_KEYFRAME ? AV_PKT_FLAG_KEY : 0;
     pkt->pos = sample->pos;
 
