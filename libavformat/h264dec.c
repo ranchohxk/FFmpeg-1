@@ -40,7 +40,6 @@ static int h264_probe(AVProbeData *p)
     int sps_ids[MAX_SPS_COUNT+1] = {0};
     unsigned pps_id, sps_id;
     GetBitContext gb;
-
     for (i = 0; i + 2 < p->buf_size; i++) {
         code = (code << 8) + p->buf[i];
         if ((code & 0xffffff00) == 0x100) {

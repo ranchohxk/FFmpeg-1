@@ -21,6 +21,7 @@
  */
 
 /**
+ *元数据读取
  * @file
  * Shows how the metadata API can be used in application programs.
  * @example metadata.c
@@ -30,14 +31,14 @@
 
 #include <libavformat/avformat.h>
 #include <libavutil/dict.h>
-
+//argc 是外部命令参数的个数，argv[] 存放各参数的内容
 int main (int argc, char **argv)
 {
     AVFormatContext *fmt_ctx = NULL;
     AVDictionaryEntry *tag = NULL;
     int ret;
 
-    if (argc != 2) {
+    if (argc != 2) {//如果参数不为2个  如 ./metadata 1.mp4
         printf("usage: %s <input_file>\n"
                "example program to demonstrate the use of the libavformat metadata API.\n"
                "\n", argv[0]);
@@ -45,6 +46,7 @@ int main (int argc, char **argv)
     }
 
     av_register_all();
+	//传第二个参数的文件名
     if ((ret = avformat_open_input(&fmt_ctx, argv[1], NULL, NULL)))
         return ret;
 

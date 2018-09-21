@@ -94,24 +94,24 @@ int main(int argc, char **argv)
     int ret;
     AVPacket *pkt;
 
-    if (argc <= 2) {
+    if (argc <= 2) {//如果命令行参数小于2个的话
         fprintf(stderr, "Usage: %s <input file> <output file>\n", argv[0]);
         exit(0);
     }
-    filename    = argv[1];
-    outfilename = argv[2];
+    filename    = argv[1];//第二个参数为输入文件
+    outfilename = argv[2];//第三个参数为输出文件
 
     avcodec_register_all();
 
     pkt = av_packet_alloc();
-    if (!pkt)
+    if (!pkt)//申请失败
         exit(1);
 
     /* set end of buffer to 0 (this ensures that no overreading happens for damaged MPEG streams) */
     memset(inbuf + INBUF_SIZE, 0, AV_INPUT_BUFFER_PADDING_SIZE);
 
     /* find the MPEG-1 video decoder */
-    codec = avcodec_find_decoder(AV_CODEC_ID_H264);
+    codec = avcodec_find_decoder(AV_CODEC_ID_H264);//找264解码器
     if (!codec) {
         fprintf(stderr, "Codec not found\n");
         exit(1);

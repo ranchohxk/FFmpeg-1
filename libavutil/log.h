@@ -151,11 +151,12 @@ typedef struct AVClass {
  *
  * @{
  */
-
+ 
+//log的级别
 /**
  * Print no output.
  */
-#define AV_LOG_QUIET    -8
+#define AV_LOG_QUIET    -8  //什么都不打印
 
 /**
  * Something went really wrong and we will crash now.
@@ -173,7 +174,7 @@ typedef struct AVClass {
  * Something went wrong and cannot losslessly be recovered.
  * However, not all future data is affected.
  */
-#define AV_LOG_ERROR    16
+#define AV_LOG_ERROR    16  //只打印错误信息
 
 /**
  * Something somehow does not look correct. This may or may not
@@ -194,7 +195,7 @@ typedef struct AVClass {
 /**
  * Stuff which is only useful for libav* developers.
  */
-#define AV_LOG_DEBUG    48
+#define AV_LOG_DEBUG    48  //debug模式
 
 /**
  * Extremely verbose debugging, useful for libav* development.

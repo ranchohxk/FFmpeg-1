@@ -53,7 +53,7 @@ static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 #define BACKTRACE_LOGLEVEL AV_LOG_ERROR
 #endif
 
-static int av_log_level = AV_LOG_INFO;
+static int av_log_level = AV_LOG_INFO;//默认是INFO等级
 static int flags;
 
 #define NB_LEVELS 8
@@ -315,13 +315,13 @@ void av_log_default_callback(void* ptr, int level, const char* fmt, va_list vl)
         level &= 0xff;
     }
 
-    if (level > av_log_level)
+    if (level > av_log_level)//如果log的level大于设置的值（可以通过av_log_set_level设置，不处理，直接退出
         return;
 #if HAVE_PTHREADS
     pthread_mutex_lock(&mutex);
 #endif
 
-    format_line(ptr, level, fmt, vl, part, &print_prefix, type);
+    format_line(ptr, level, fmt, vl, part, &print_prefix, type);//设定log输出格式
     snprintf(line, sizeof(line), "%s%s%s%s", part[0].str, part[1].str, part[2].str, part[3].str);
 
 #if HAVE_ISATTY
@@ -342,7 +342,7 @@ void av_log_default_callback(void* ptr, int level, const char* fmt, va_list vl)
     }
     strcpy(prev, line);
     sanitize(part[0].str);
-    colored_fputs(type[0], 0, part[0].str);
+    colored_fputs(type[0], 0, part[0].str);//设定log的颜色
     sanitize(part[1].str);
     colored_fputs(type[1], 0, part[1].str);
     sanitize(part[2].str);
@@ -362,7 +362,7 @@ end:
 }
 
 static void (*av_log_callback)(void*, int, const char*, va_list) =
-    av_log_default_callback;
+    av_log_default_callback;//默认使用av_log_default_callback
 
 void av_log(void* avcl, int level, const char *fmt, ...)
 {
@@ -370,7 +370,7 @@ void av_log(void* avcl, int level, const char *fmt, ...)
     va_list vl;
     va_start(vl, fmt);
     if (avc && avc->version >= (50 << 16 | 15 << 8 | 2) &&
-        avc->log_level_offset_offset && level >= AV_LOG_FATAL)
+        avc->log_level_offset_offset && level >= AV_LOG_FATAL)//不知道这里干嘛的
         level += *(int *) (((uint8_t *) avcl) + avc->log_level_offset_offset);
     av_vlog(avcl, level, fmt, vl);
     va_end(vl);
@@ -378,16 +378,16 @@ void av_log(void* avcl, int level, const char *fmt, ...)
 
 void av_vlog(void* avcl, int level, const char *fmt, va_list vl)
 {
-    void (*log_callback)(void*, int, const char*, va_list) = av_log_callback;
+    void (*log_callback)(void*, int, const char*, va_list) = av_log_callback;//回调函数
     if (log_callback)
         log_callback(avcl, level, fmt, vl);
 }
-
+//获取设置的level等级
 int av_log_get_level(void)
 {
     return av_log_level;
 }
-
+//设置log的level等级
 void av_log_set_level(int level)
 {
     av_log_level = level;
