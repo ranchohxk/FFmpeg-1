@@ -596,7 +596,7 @@ static int decoder_decode_frame(Decoder *d, AVFrame *frame, AVSubtitle *sub) {
                 switch (d->avctx->codec_type) {
                     case AVMEDIA_TYPE_VIDEO:
                         ret = avcodec_receive_frame(d->avctx, frame);
-                        if (ret >= 0) {
+                        if (ret >= 0) {//这里修正了pts
                             if (decoder_reorder_pts == -1) {
                                 frame->pts = frame->best_effort_timestamp;
                             } else if (!decoder_reorder_pts) {
@@ -636,7 +636,7 @@ static int decoder_decode_frame(Decoder *d, AVFrame *frame, AVSubtitle *sub) {
                 av_packet_move_ref(&pkt, &d->pkt);
                 d->packet_pending = 0;
             } else {
-                if (packet_queue_get(d->queue, &pkt, 1, &d->pkt_serial) < 0)
+                if (packet_queue_get(d->queue, &pkt, 1, &d->pkt_serial) < 0)//获取视频压缩编码数据（一个AVPacket）
                     return -1;
             }
         } while (d->queue->serial != d->pkt_serial);
@@ -1552,7 +1552,7 @@ static void update_video_pts(VideoState *is, double pts, int64_t pos, int serial
     sync_clock_to_slave(&is->extclk, &is->vidclk);
 }
 
-/* called to display each frame */
+/* 视频刷新显示线程called to display each frame */
 static void video_refresh(void *opaque, double *remaining_time)
 {
     VideoState *is = opaque;
@@ -1711,6 +1711,9 @@ display:
     }
 }
 
+/***
+*解码后数据入队
+**/
 static int queue_picture(VideoState *is, AVFrame *src_frame, double pts, double duration, int64_t pos, int serial)
 {
     Frame *vp;
@@ -1723,18 +1726,18 @@ static int queue_picture(VideoState *is, AVFrame *src_frame, double pts, double 
     if (!(vp = frame_queue_peek_writable(&is->pictq)))
         return -1;
 
-    vp->sar = src_frame->sample_aspect_ratio;
+    vp->sar = src_frame->sample_aspect_ratio;//视频宽高比
     vp->uploaded = 0;
 
     vp->width = src_frame->width;
     vp->height = src_frame->height;
     vp->format = src_frame->format;
 
-    vp->pts = pts;
+    vp->pts = pts;//pts赋值
     vp->duration = duration;
     vp->pos = pos;
     vp->serial = serial;
-
+    //设置显示界面的宽高
     set_default_window_size(vp->width, vp->height, vp->sar);
 
     av_frame_move_ref(vp->frame, src_frame);
@@ -1745,18 +1748,18 @@ static int queue_picture(VideoState *is, AVFrame *src_frame, double pts, double 
 static int get_video_frame(VideoState *is, AVFrame *frame)
 {
     int got_picture;
-
+    //解码获取解码后的数据avframe
     if ((got_picture = decoder_decode_frame(&is->viddec, frame, NULL)) < 0)
         return -1;
 
     if (got_picture) {
         double dpts = NAN;
-
+        
         if (frame->pts != AV_NOPTS_VALUE)
-            dpts = av_q2d(is->video_st->time_base) * frame->pts;
-
+            dpts = av_q2d(is->video_st->time_base) * frame->pts;//视频的pts转换为ms,也就是当前进度时间
+		//视频的宽高比
         frame->sample_aspect_ratio = av_guess_sample_aspect_ratio(is->ic, is->video_st, frame);
-
+        //丢帧数大于0且同步不是按照video
         if (framedrop>0 || (framedrop && get_master_sync_type(is) != AV_SYNC_VIDEO_MASTER)) {
             if (frame->pts != AV_NOPTS_VALUE) {
                 double diff = dpts - get_master_clock(is);
@@ -1765,7 +1768,7 @@ static int get_video_frame(VideoState *is, AVFrame *frame)
                     is->viddec.pkt_serial == is->vidclk.serial &&
                     is->videoq.nb_packets) {
                     is->frame_drops_early++;
-                    av_frame_unref(frame);
+                    av_frame_unref(frame);//丢帧
                     got_picture = 0;
                 }
             }
@@ -2098,6 +2101,9 @@ static int decoder_start(Decoder *d, int (*fn)(void *), void *arg)
     return 0;
 }
 
+/***
+*视频解码线程
+*/
 static int video_thread(void *arg)
 {
     VideoState *is = arg;
@@ -2106,7 +2112,9 @@ static int video_thread(void *arg)
     double duration;
     int ret;
     AVRational tb = is->video_st->time_base;
+	//视频帧率
     AVRational frame_rate = av_guess_frame_rate(is->ic, is->video_st, NULL);
+	
 
 #if CONFIG_AVFILTER
     AVFilterGraph *graph = avfilter_graph_alloc();
@@ -2131,12 +2139,12 @@ static int video_thread(void *arg)
     }
 
     for (;;) {
+		//获取一个存储解码后数据的AVFrame
         ret = get_video_frame(is, frame);
         if (ret < 0)
             goto the_end;
         if (!ret)
             continue;
-
 #if CONFIG_AVFILTER
         if (   last_w != frame->width
             || last_h != frame->height
@@ -2189,9 +2197,10 @@ static int video_thread(void *arg)
             tb = av_buffersink_get_time_base(filt_out);
 #endif
             duration = (frame_rate.num && frame_rate.den ? av_q2d((AVRational){frame_rate.den, frame_rate.num}) : 0);
-            pts = (frame->pts == AV_NOPTS_VALUE) ? NAN : frame->pts * av_q2d(tb);
+            pts = (frame->pts == AV_NOPTS_VALUE) ? NAN : frame->pts * av_q2d(tb);//获取frame的pts
+			//将解码后的数据放到队列中
             ret = queue_picture(is, frame, pts, duration, frame->pkt_pos, is->viddec.pkt_serial);
-            av_frame_unref(frame);
+            av_frame_unref(frame);//释放frame
 #if CONFIG_AVFILTER
         }
 #endif
@@ -3598,6 +3607,7 @@ static const OptionDef options[] = {
     { "stats", OPT_BOOL | OPT_EXPERT, { &show_status }, "show status", "" },
     { "fast", OPT_BOOL | OPT_EXPERT, { &fast }, "non spec compliant optimizations", "" },
     { "genpts", OPT_BOOL | OPT_EXPERT, { &genpts }, "generate pts", "" },
+    //让解码器重新排序修复pts
     { "drp", OPT_INT | HAS_ARG | OPT_EXPERT, { &decoder_reorder_pts }, "let decoder reorder pts 0=off 1=on -1=auto", ""},
     { "lowres", OPT_INT | HAS_ARG | OPT_EXPERT, { &lowres }, "", "" },
     { "sync", HAS_ARG | OPT_EXPERT, { .func_arg = opt_sync }, "set audio-video sync. type (type=audio/video/ext)", "type" },
@@ -3700,6 +3710,8 @@ int main(int argc, char **argv)
     av_log_set_flags(AV_LOG_SKIP_REPEATED);
 	//解析log设置级别
     parse_loglevel(argc, argv, options);
+	//修改为默认打印info等级log，方便调试查看log
+	av_log_set_level(AV_LOG_DEBUG);
 
     /* register all codecs, demux and protocols */
 #if CONFIG_AVDEVICE

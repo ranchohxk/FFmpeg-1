@@ -511,7 +511,6 @@ static int avi_read_header(AVFormatContext *s)
             tag1 = avio_rl32(pb);
 
             print_tag("list", tag1, 0);
-
             if (tag1 == MKTAG('m', 'o', 'v', 'i')) {
                 avi->movi_list = avio_tell(pb) - 4;
                 if (size)
@@ -524,7 +523,6 @@ static int avi_read_header(AVFormatContext *s)
                 ff_read_riff_info(s, size - 4);
             else if (tag1 == MKTAG('n', 'c', 'd', 't'))
                 avi_read_nikon(s, list_end);
-
             break;
         case MKTAG('I', 'D', 'I', 'T'):
         {
@@ -1014,7 +1012,7 @@ end_of_header:
 fail:
         return AVERROR_INVALIDDATA;
     }
-
+    
     if (!avi->index_loaded && (pb->seekable & AVIO_SEEKABLE_NORMAL))
         avi_load_index(s);
     calculate_bitrate(s);
@@ -1056,7 +1054,6 @@ fail:
 
     ff_metadata_conv_ctx(s, NULL, avi_metadata_conv);
     ff_metadata_conv_ctx(s, NULL, ff_riff_info_conv);
-
     return 0;
 }
 
@@ -1718,10 +1715,8 @@ static int guess_ni_flag(AVFormatContext *s)
             first_end = st->index_entries[n - 1].pos;
     }
     avio_seek(s->pb, oldpos, SEEK_SET);
-
     if (last_start > first_end)
         return 1;
-
     return check_stream_max_drift(s);
 }
 

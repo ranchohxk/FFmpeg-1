@@ -343,7 +343,6 @@ int av_probe_input_buffer2(AVIOContext *pb, AVInputFormat **fmt,
         char *semi;
         av_opt_get(pb, "mime_type", AV_OPT_SEARCH_CHILDREN, &mime_type_opt);
         pd.mime_type = (const char *)mime_type_opt;//¸³Öµmime_typeµ½probedataÖÐ
-        av_log(NULL, AV_LOG_ERROR,"hxk>>>>mime_type:%s\n",pd.mime_type);
         semi = pd.mime_type ? strchr(pd.mime_type, ';') : NULL;
         if (semi) {
             *semi = '\0';
