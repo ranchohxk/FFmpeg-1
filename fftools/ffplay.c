@@ -1407,7 +1407,9 @@ static void video_display(VideoState *is)
         video_image_display(is);
     SDL_RenderPresent(renderer);
 }
-
+/**
+*获取时钟
+**/
 static double get_clock(Clock *c)
 {
     if (*c->queue_serial != c->serial)
@@ -1472,7 +1474,9 @@ static int get_master_sync_type(VideoState *is) {
     }
 }
 
-/* get the current master clock value */
+/**
+*获取主时钟
+*get the current master clock value */
 static double get_master_clock(VideoState *is)
 {
     double val;
@@ -2556,10 +2560,10 @@ static int audio_open(void *opaque, int64_t wanted_channel_layout, int wanted_nb
 {
     SDL_AudioSpec wanted_spec, spec;
     const char *env;
+	av_log(NULL,AV_LOG_ERROR,"wanted_channel_layout:%ld\n",wanted_channel_layout);
     static const int next_nb_channels[] = {0, 0, 1, 6, 2, 6, 4, 6};
     static const int next_sample_rates[] = {0, 44100, 48000, 96000, 192000};
     int next_sample_rate_idx = FF_ARRAY_ELEMS(next_sample_rates) - 1;
-
     env = SDL_getenv("SDL_AUDIO_CHANNELS");
     if (env) {
         wanted_nb_channels = atoi(env);
