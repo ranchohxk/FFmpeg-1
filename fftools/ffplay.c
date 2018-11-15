@@ -1475,12 +1475,11 @@ static int get_master_sync_type(VideoState *is) {
 }
 
 /**
-*获取主时钟
+*获取主时钟,单位秒
 *get the current master clock value */
 static double get_master_clock(VideoState *is)
 {
     double val;
-
     switch (get_master_sync_type(is)) {
         case AV_SYNC_VIDEO_MASTER:
             val = get_clock(&is->vidclk);
@@ -1635,7 +1634,7 @@ static void video_refresh(void *opaque, double *remaining_time)
     double time;
 
     Frame *sp, *sp2;
-    //主同步类型是外部时钟同步，并且是实时码流，则检查外部时钟速度
+    //主同步类型是外部时钟同步，并且是实时码流，则检查外部时钟速度,点播的不是哦
     if (!is->paused && get_master_sync_type(is) == AV_SYNC_EXTERNAL_CLOCK && is->realtime)
         check_external_clock_speed(is);
      //音频码流
@@ -1774,8 +1773,13 @@ display:
             else if (is->video_st)
                 av_diff = get_master_clock(is) - get_clock(&is->vidclk);
             else if (is->audio_st)
-                av_diff = get_master_clock(is) - get_clock(&is->audclk);
-            av_log(NULL, AV_LOG_INFO,
+                av_diff = get_master_clock(is) - get_clock(&is->audclk);         
+			//终端显得窗口中最下面一行
+			//显示当前播放时间，默认音频作为基准，如果没有音频的视频，则外部时钟作为基准，单位秒
+			//显示是音频还是视频，如果只有视频M-V
+		    //音频和视频差值
+		    //音频和视频队列的size值
+			av_log(NULL, AV_LOG_INFO,
                    "%7.2f %s:%7.3f fd=%4d aq=%5dKB vq=%5dKB sq=%5dB f=%"PRId64"/%"PRId64"   \r",
                    get_master_clock(is),
                    (is->audio_st && is->video_st) ? "A-V" : (is->video_st ? "M-V" : (is->audio_st ? "M-A" : "   ")),

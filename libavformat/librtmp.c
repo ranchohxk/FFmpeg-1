@@ -99,6 +99,7 @@ static int rtmp_open(URLContext *s, const char *uri, int flags)
     int rc = 0, level;
     char *filename = s->filename;
     int len = strlen(s->filename) + 1;
+	
 
     switch (av_log_get_level()) {
     default:
