@@ -108,7 +108,7 @@ typedef struct RTMPContext {
     char*         flashver;                   ///< version of the flash plugin
     char*         swfhash;                    ///< SHA256 hash of the decompressed SWF file (32 bytes)
     int           swfhash_len;                ///< length of the SHA256 hash
-    int           swfsize;                    ///< size of the decompressed SWF file
+    int           swfsize;                    ///< swf文件解压后的大小，用于swf认证，size of the decompressed SWF file
     char*         swfurl;                     ///< url of the swf player
     char*         swfverify;                  ///< URL to player swf file, compute hash/size automatically
     char          swfverification[42];        ///< hash of the SWF verification
@@ -117,7 +117,7 @@ typedef struct RTMPContext {
     int           max_sent_unacked;           ///< max unacked sent bytes
     int           client_buffer_time;         ///< client buffer time in ms
     int           flush_interval;             ///< number of packets flushed in the same request (RTMPT only)
-    int           encrypted;                  ///< 加密连接use an encrypted connection (RTMPE only)
+    int           encrypted;                  ///< 加密连接(只有rtmpe)use an encrypted connection (RTMPE only)
     TrackedMethod*tracked_methods;            ///< tracked methods buffer
     int           nb_tracked_methods;         ///< number of tracked methods
     int           tracked_methods_size;       ///< size of the tracked methods buffer
@@ -1224,7 +1224,7 @@ fail:
     return ret;
 }
 
-/**
+/**执行握手与服务器交换的伪随机数据
  * Perform handshake with the server by means of exchanging pseudorandom data
  * signed with HMAC-SHA2 digest.
  *
@@ -1233,6 +1233,7 @@ fail:
 static int rtmp_handshake(URLContext *s, RTMPContext *rt)
 {
     AVLFG rnd;
+	//发送C0，C0有1个字节,8位，C0表示客户端请求的版本，这里是3， C1有1536个字节，所有总共发送1537个字节
     uint8_t tosend    [RTMP_HANDSHAKE_PACKET_SIZE+1] = {
         3,                // unencrypted data
         0, 0, 0, 0,       // client uptime
@@ -1241,6 +1242,7 @@ static int rtmp_handshake(URLContext *s, RTMPContext *rt)
         RTMP_CLIENT_VER3,
         RTMP_CLIENT_VER4,
     };
+	//C2和S2也是1536个字节
     uint8_t clientdata[RTMP_HANDSHAKE_PACKET_SIZE];
     uint8_t serverdata[RTMP_HANDSHAKE_PACKET_SIZE+1];
     int i;
@@ -1251,10 +1253,10 @@ static int rtmp_handshake(URLContext *s, RTMPContext *rt)
     av_log(s, AV_LOG_DEBUG, "Handshaking...\n");
 
     av_lfg_init(&rnd, 0xDEADC0DE);
-    // generate handshake packet - 1536 bytes of pseudorandom data
+    // generate handshake packet - 1536字节的伪随机数1536 bytes of pseudorandom data
     for (i = 9; i <= RTMP_HANDSHAKE_PACKET_SIZE; i++)
         tosend[i] = av_lfg_get(&rnd) >> 24;
-
+    //加密连接，rtmpe
     if (CONFIG_FFRTMPCRYPT_PROTOCOL && rt->encrypted) {
         /* When the client wants to use RTMPE, we have to change the command
          * byte to 0x06 which means to use encrypted data and we have to set
@@ -1272,6 +1274,7 @@ static int rtmp_handshake(URLContext *s, RTMPContext *rt)
     }
 
     client_pos = rtmp_handshake_imprint_with_digest(tosend + 1, rt->encrypted);
+	av_log(s, AV_LOG_DEBUG, "client_pos:%d\n", client_pos);
     if (client_pos < 0)
         return client_pos;
 
@@ -1296,7 +1299,7 @@ static int rtmp_handshake(URLContext *s, RTMPContext *rt)
     av_log(s, AV_LOG_DEBUG, "Type answer %d\n", serverdata[0]);
     av_log(s, AV_LOG_DEBUG, "Server version %d.%d.%d.%d\n",
            serverdata[5], serverdata[6], serverdata[7], serverdata[8]);
-
+	//以rtmp://58.200.131.2:1935/livetv/hunantv为例，走的是这里
     if (rt->is_input && serverdata[5] >= 3) {
         server_pos = rtmp_validate_digest(serverdata + 1, 772);
         if (server_pos < 0)
@@ -1313,9 +1316,11 @@ static int rtmp_handshake(URLContext *s, RTMPContext *rt)
                 return AVERROR(EIO);
             }
         }
+	
 
         /* Generate SWFVerification token (SHA256 HMAC hash of decompressed SWF,
          * key are the last 32 bytes of the server handshake. */
+         //这里没有走swf
         if (rt->swfsize) {
             if ((ret = rtmp_calc_swf_verification(s, rt, serverdata + 1 +
                                                   RTMP_HANDSHAKE_PACKET_SIZE - 32)) < 0)
@@ -1332,7 +1337,7 @@ static int rtmp_handshake(URLContext *s, RTMPContext *rt)
                                   0, digest, 32, signature);
         if (ret < 0)
             return ret;
-
+		//加密
         if (CONFIG_FFRTMPCRYPT_PROTOCOL && rt->encrypted) {
             /* Compute the shared secret key sent by the server and initialize
              * the RC4 encryption. */
@@ -1362,7 +1367,7 @@ static int rtmp_handshake(URLContext *s, RTMPContext *rt)
                                   tosend + RTMP_HANDSHAKE_PACKET_SIZE - 32);
         if (ret < 0)
             return ret;
-
+		//加密
         if (CONFIG_FFRTMPCRYPT_PROTOCOL && rt->encrypted) {
             /* Encrypt the signature to be send to the server. */
             ff_rtmpe_encrypt_sig(rt->stream, tosend +
@@ -1374,7 +1379,8 @@ static int rtmp_handshake(URLContext *s, RTMPContext *rt)
         if ((ret = ffurl_write(rt->stream, tosend,
                                RTMP_HANDSHAKE_PACKET_SIZE)) < 0)
             return ret;
-
+		
+		//加密
         if (CONFIG_FFRTMPCRYPT_PROTOCOL && rt->encrypted) {
             /* Set RC4 keys for encryption and update the keystreams. */
             if ((ret = ff_rtmpe_update_keystream(rt->stream)) < 0)
@@ -2715,8 +2721,8 @@ reconnect:
             goto fail;
     }
 
-    rt->state = STATE_START;
-	//rtmp握手
+    rt->state = STATE_START;//状态start
+	//rtmp握手，小于0,握手成功
     if (!rt->listen && (ret = rtmp_handshake(s, rt)) < 0)
         goto fail;
     if (rt->listen && (ret = rtmp_server_handshake(s, rt)) < 0)
@@ -2724,11 +2730,10 @@ reconnect:
 
     rt->out_chunk_size = 128;
     rt->in_chunk_size  = 128; // Probably overwritten later
-    rt->state = STATE_HANDSHAKED;
+    rt->state = STATE_HANDSHAKED;//握手
 	
     // Keep the application name when it has been defined by the user.
     old_app = rt->app;
-
     rt->app = av_malloc(APP_MAX_LENGTH);
     if (!rt->app) {
         ret = AVERROR(ENOMEM);

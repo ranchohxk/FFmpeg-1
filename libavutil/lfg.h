@@ -1,7 +1,7 @@
 /*
  * Lagged Fibonacci PRNG
  * Copyright (c) 2008 Michael Niedermayer
- *
+ * ì³²¨ÄÇÆõPRNGÖÍºó
  * This file is part of FFmpeg.
  *
  * FFmpeg is free software; you can redistribute it and/or
