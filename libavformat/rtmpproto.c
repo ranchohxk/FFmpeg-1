@@ -117,7 +117,7 @@ typedef struct RTMPContext {
     int           max_sent_unacked;           ///< max unacked sent bytes
     int           client_buffer_time;         ///< client buffer time in ms
     int           flush_interval;             ///< number of packets flushed in the same request (RTMPT only)
-    int           encrypted;                  ///< use an encrypted connection (RTMPE only)
+    int           encrypted;                  ///< 加密连接use an encrypted connection (RTMPE only)
     TrackedMethod*tracked_methods;            ///< tracked methods buffer
     int           nb_tracked_methods;         ///< number of tracked methods
     int           tracked_methods_size;       ///< size of the tracked methods buffer
@@ -2634,14 +2634,21 @@ static int rtmp_open(URLContext *s, const char *uri, int flags, AVDictionary **o
 	
     //连接超时检测，默认-1
     if (rt->listen_timeout > 0)
-        rt->listen = 1;
+        rt->listen = 1;//没有执行到这里，所以默认是0
 
     rt->is_input = !(flags & AVIO_FLAG_WRITE);
-
+    //如rtmp://58.200.131.2:1935/livetv/hunantv，那么分离后对应的数据就是
+    //s->filename:rtmp://58.200.131.2:1935/livetv/hunantv,
+    //proto:rtmp,
+    //auth:,
+    //hostname:58.200.131.2,
+    //path:/livetv/hunantv
+    //port：1935端口
     av_url_split(proto, sizeof(proto), auth, sizeof(auth),
                  hostname, sizeof(hostname), &port,
                  path, sizeof(path), s->filename);
-
+	
+	//该函数返回在字符串 str 中第一次出现字符 c 的位置，如果未找到该字符则返回 NULL。
     n = strchr(path, ' ');
     if (n) {
         av_log(s, AV_LOG_WARNING,
@@ -2650,7 +2657,7 @@ static int rtmp_open(URLContext *s, const char *uri, int flags, AVDictionary **o
                "See the documentation for the correct way to pass parameters.\n");
         *n = '\0'; // Trim not supported part
     }
-
+    
     if (auth[0]) {
         char *ptr = strchr(auth, ':');
         if (ptr) {
@@ -2659,7 +2666,7 @@ static int rtmp_open(URLContext *s, const char *uri, int flags, AVDictionary **o
             av_strlcpy(rt->password, ptr + 1, sizeof(rt->password));
         }
     }
-
+	//如果proto不rtmp
     if (rt->listen && strcmp(proto, "rtmp")) {
         av_log(s, AV_LOG_ERROR, "rtmp_listen not available for %s\n",
                proto);
@@ -2671,12 +2678,12 @@ static int rtmp_open(URLContext *s, const char *uri, int flags, AVDictionary **o
 
         /* open the http tunneling connection */
         ff_url_join(buf, sizeof(buf), "ffrtmphttp", NULL, hostname, port, NULL);
-    } else if (!strcmp(proto, "rtmps")) {
+    } else if (!strcmp(proto, "rtmps")) {//RTMP的另一个变种，此协议是通过SSL加密的RTMP协议，为数据通讯提供安全支持。SSL(Secure Sockets Layer 安全套接层)是为网络通信提供安全及数据完整性的一种安全协议。SSL在传输层对网络连接进行加密。默认端口443。
         /* open the tls connection */
         if (port < 0)
             port = RTMPS_DEFAULT_PORT;
         ff_url_join(buf, sizeof(buf), "tls", NULL, hostname, port, NULL);
-    } else if (!strcmp(proto, "rtmpe") || (!strcmp(proto, "rtmpte"))) {
+    } else if (!strcmp(proto, "rtmpe") || (!strcmp(proto, "rtmpte"))) {//RTMPTE 这个协议是一个通过加密通道连接的RTMPE，默认端口80.
         if (!strcmp(proto, "rtmpte"))
             av_dict_set(opts, "ffrtmpcrypt_tunneling", "1", 1);
 
@@ -2685,14 +2692,15 @@ static int rtmp_open(URLContext *s, const char *uri, int flags, AVDictionary **o
         rt->encrypted = 1;
     } else {
         /* open the tcp connection */
-        if (port < 0)
-            port = RTMP_DEFAULT_PORT;
+        if (port < 0)//如果端口小于0
+            port = RTMP_DEFAULT_PORT;//使用默认端口1935
         if (rt->listen)
             ff_url_join(buf, sizeof(buf), "tcp", NULL, hostname, port,
                         "?listen&listen_timeout=%d",
                         rt->listen_timeout * 1000);
         else
             ff_url_join(buf, sizeof(buf), "tcp", NULL, hostname, port, NULL);
+		//dns解析后获取的buf：tcp://58.200.131.2:1935
     }
 
 reconnect:
@@ -2702,13 +2710,13 @@ reconnect:
         av_log(s , AV_LOG_ERROR, "Cannot open connection %s\n", buf);
         goto fail;
     }
-
     if (rt->swfverify) {
         if ((ret = rtmp_calc_swfhash(s)) < 0)
             goto fail;
     }
 
     rt->state = STATE_START;
+	//rtmp握手
     if (!rt->listen && (ret = rtmp_handshake(s, rt)) < 0)
         goto fail;
     if (rt->listen && (ret = rtmp_server_handshake(s, rt)) < 0)
@@ -2717,7 +2725,7 @@ reconnect:
     rt->out_chunk_size = 128;
     rt->in_chunk_size  = 128; // Probably overwritten later
     rt->state = STATE_HANDSHAKED;
-
+	
     // Keep the application name when it has been defined by the user.
     old_app = rt->app;
 
@@ -2779,6 +2787,7 @@ reconnect:
         av_free(rt->app);
         rt->app = old_app;
     }
+	
 
     if (!rt->playpath) {
         rt->playpath = av_malloc(PLAYPATH_MAX_LENGTH);
@@ -3126,6 +3135,7 @@ static int rtmp_write(URLContext *s, const uint8_t *buf, int size)
 #define ENC AV_OPT_FLAG_ENCODING_PARAM
 
 static const AVOption rtmp_options[] = {
+	//rtmp流的发布点
     {"rtmp_app", "Name of application to connect to on the RTMP server", OFFSET(app), AV_OPT_TYPE_STRING, {.str = NULL }, 0, 0, DEC|ENC},
 	//客户端buffer的大小（单位，毫秒），默认为3秒
 	{"rtmp_buffer", "Set buffer time in milliseconds. The default is 3000.", OFFSET(client_buffer_time), AV_OPT_TYPE_INT, {.i64 = 3000}, 0, INT_MAX, DEC|ENC},
@@ -3142,12 +3152,15 @@ static const AVOption rtmp_options[] = {
 	//点播
 	{"recorded", "recorded stream", 0, AV_OPT_TYPE_CONST, {.i64 = 0}, 0, 0, DEC, "rtmp_live"},
     {"rtmp_pageurl", "URL of the web page in which the media was embedded. By default no value will be sent.", OFFSET(pageurl), AV_OPT_TYPE_STRING, {.str = NULL }, 0, 0, DEC},
-    {"rtmp_playpath", "Stream identifier to play or to publish", OFFSET(playpath), AV_OPT_TYPE_STRING, {.str = NULL }, 0, 0, DEC|ENC},
-    {"rtmp_subscribe", "Name of live stream to subscribe to. Defaults to rtmp_playpath.", OFFSET(subscribe), AV_OPT_TYPE_STRING, {.str = NULL }, 0, 0, DEC},
+	//RTMP流播放的stream地址，或者称为密钥，或者成为发布流
+	{"rtmp_playpath", "Stream identifier to play or to publish", OFFSET(playpath), AV_OPT_TYPE_STRING, {.str = NULL }, 0, 0, DEC|ENC},
+	//直播流名称，默认设置为rtmp_playpath的值
+	{"rtmp_subscribe", "Name of live stream to subscribe to. Defaults to rtmp_playpath.", OFFSET(subscribe), AV_OPT_TYPE_STRING, {.str = NULL }, 0, 0, DEC},
     {"rtmp_swfhash", "SHA256 hash of the decompressed SWF file (32 bytes).", OFFSET(swfhash), AV_OPT_TYPE_BINARY, .flags = DEC},
     {"rtmp_swfsize", "Size of the decompressed SWF file, required for SWFVerification.", OFFSET(swfsize), AV_OPT_TYPE_INT, {.i64 = 0}, 0, INT_MAX, DEC},
     {"rtmp_swfurl", "URL of the SWF player. By default no value will be sent", OFFSET(swfurl), AV_OPT_TYPE_STRING, {.str = NULL }, 0, 0, DEC|ENC},
-    {"rtmp_swfverify", "URL to player swf file, compute hash/size automatically.", OFFSET(swfverify), AV_OPT_TYPE_STRING, {.str = NULL }, 0, 0, DEC},
+	//设置swf认证时swf文件的URL地址
+	{"rtmp_swfverify", "URL to player swf file, compute hash/size automatically.", OFFSET(swfverify), AV_OPT_TYPE_STRING, {.str = NULL }, 0, 0, DEC},
     {"rtmp_tcurl", "URL of the target stream. Defaults to proto://host[:port]/app.", OFFSET(tcurl), AV_OPT_TYPE_STRING, {.str = NULL }, 0, 0, DEC|ENC},
     {"rtmp_listen", "Listen for incoming rtmp connections", OFFSET(listen), AV_OPT_TYPE_INT, {.i64 = 0}, INT_MIN, INT_MAX, DEC, "rtmp_listen" },
     {"listen",      "Listen for incoming rtmp connections", OFFSET(listen), AV_OPT_TYPE_INT, {.i64 = 0}, INT_MIN, INT_MAX, DEC, "rtmp_listen" },

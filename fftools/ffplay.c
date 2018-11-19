@@ -2564,7 +2564,6 @@ static int audio_open(void *opaque, int64_t wanted_channel_layout, int wanted_nb
 {
     SDL_AudioSpec wanted_spec, spec;
     const char *env;
-	av_log(NULL,AV_LOG_ERROR,"wanted_channel_layout:%ld\n",wanted_channel_layout);
     static const int next_nb_channels[] = {0, 0, 1, 6, 2, 6, 4, 6};
     static const int next_sample_rates[] = {0, 44100, 48000, 96000, 192000};
     int next_sample_rate_idx = FF_ARRAY_ELEMS(next_sample_rates) - 1;
@@ -3833,7 +3832,7 @@ int main(int argc, char **argv)
 	//解析log设置级别
     parse_loglevel(argc, argv, options);
 	//修改为默认打印info等级log，方便调试查看log
-	//av_log_set_level(AV_LOG_DEBUG);
+	av_log_set_level(AV_LOG_DEBUG);
 
     /* register all codecs, demux and protocols */
 #if CONFIG_AVDEVICE

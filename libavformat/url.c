@@ -50,6 +50,7 @@ int ff_url_join(char *str, int size, const char *proto,
     /* Determine if hostname is a numerical IPv6 address,
      * properly escape it within [] in that case. */
     hints.ai_flags = AI_NUMERICHOST;
+	//dns解析，获取ip地址
     if (!getaddrinfo(hostname, NULL, &hints, &ai)) {
         if (ai->ai_family == AF_INET6) {
             av_strlcat(str, "[", size);
