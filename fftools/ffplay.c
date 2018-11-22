@@ -177,15 +177,15 @@ typedef struct Frame {
 /*解码后的帧队列*/
 typedef struct FrameQueue {
     Frame queue[FRAME_QUEUE_SIZE];//队列数组,用数组模拟队列
-    int rindex;//读索引
-    int windex;//写索引
+    int rindex;//读帧数据索引，表示循环队列的队首
+    int windex;//写帧数据索引，/表示循环队列的对尾
     int size;//大小,当前存储的节点个数(或者说，当前已写入的节点个数)
     int max_size;//最大允许存储的节点个数
     int keep_last;//是否要保留最后一个读节点
-    int rindex_shown;//当前节点是否已经显示
+    int rindex_shown;//当前节点是否已经显示索引
     SDL_mutex *mutex;//互斥变量
     SDL_cond *cond;//条件变量
-    PacketQueue *pktq;//关联的PacketQueue
+    PacketQueue *pktq;//关联的PacketQueue，指向各自数据包(ES包)的队列
 } FrameQueue;
 //时钟同步类型
 enum {
@@ -253,7 +253,7 @@ typedef struct VideoState {
     uint8_t *audio_buf;// 音频缓冲区
     uint8_t *audio_buf1;//音频缓冲区1
     unsigned int audio_buf_size; /* 音频缓冲大小in bytes */
-    unsigned int audio_buf1_size;//音频缓冲大小1
+    unsigned int audio_buf1_size;//音频缓冲大小
     int audio_buf_index; /*音频缓冲索引in bytes */
     int audio_write_buf_size;//音频写入缓冲大小
     int audio_volume; // 音量
@@ -316,7 +316,7 @@ typedef struct VideoState {
 	// 上一个视频码流Id、上一个音频码流Id、上一个字幕码流Id
     int last_video_stream, last_audio_stream, last_subtitle_stream;
 
-    SDL_cond *continue_read_thread;// 连续读线程
+    SDL_cond *continue_read_thread;// 继续读线程信号量
 } VideoState;
 
 /* options specified by the user */
@@ -727,10 +727,12 @@ static void decoder_destroy(Decoder *d) {
 **/
 static void frame_queue_unref_item(Frame *vp)
 {
-    av_frame_unref(vp->frame);//销毁帧
-    avsubtitle_free(&vp->sub);//销毁字幕
+    av_frame_unref(vp->frame);//frame计数减1
+    avsubtitle_free(&vp->sub);//sub关联的内存释放
 }
-
+/**
+*解码后帧队列初始化
+*/
 static int frame_queue_init(FrameQueue *f, PacketQueue *pktq, int max_size, int keep_last)
 {
     int i;
@@ -751,7 +753,9 @@ static int frame_queue_init(FrameQueue *f, PacketQueue *pktq, int max_size, int 
             return AVERROR(ENOMEM);
     return 0;
 }
-
+/**
+*解码后帧队列销毁
+*/
 static void frame_queue_destory(FrameQueue *f)
 {
     int i;
@@ -772,54 +776,65 @@ static void frame_queue_signal(FrameQueue *f)
 }
 /**
 *查找/定位帧
+表示从循环队列帧里面取出当前需要显示的一帧视频
 **/
 static Frame *frame_queue_peek(FrameQueue *f)
 {
     return &f->queue[(f->rindex + f->rindex_shown) % f->max_size];
 }
-
+/**
+*表示从循环队列帧里面取出当前需要显示的下一帧视频
+*/
 static Frame *frame_queue_peek_next(FrameQueue *f)
 {
     return &f->queue[(f->rindex + f->rindex_shown + 1) % f->max_size];
 }
 
 /**
-*查找最后一帧
+*读上一个节点，也就是上一帧视频
 **/
 static Frame *frame_queue_peek_last(FrameQueue *f)
 {
     return &f->queue[f->rindex];
 }
-
+/**
+*判断解码后帧队列是否可写，并返回可写节点
+**/
 static Frame *frame_queue_peek_writable(FrameQueue *f)
 {
     /* wait until we have space to put a new frame */
     SDL_LockMutex(f->mutex);
+	//先通过size判断当前缓冲区内节点个数是否大于最大值，如果超过最大值，则等待
     while (f->size >= f->max_size &&
            !f->pktq->abort_request) {
         SDL_CondWait(f->cond, f->mutex);
     }
     SDL_UnlockMutex(f->mutex);
-
+	//如果有中断请求，返回null
     if (f->pktq->abort_request)
         return NULL;
 
     return &f->queue[f->windex];
 }
 
+/**
+*判断解码后帧队列是否可读，并返回可读节点
+*/
 static Frame *frame_queue_peek_readable(FrameQueue *f)
 {
     /* wait until we have a readable a new frame */
     SDL_LockMutex(f->mutex);
+	//判断是否有可读节点，如果节点数减去当前显示节点，
+	//也就是剩余可读节点数小于0的话，那么就说明队列中没有可读节点,需要等
     while (f->size - f->rindex_shown <= 0 &&
            !f->pktq->abort_request) {
         SDL_CondWait(f->cond, f->mutex);
     }
     SDL_UnlockMutex(f->mutex);
-
+	//如果有退出请求，则返回null
     if (f->pktq->abort_request)
         return NULL;
-
+	//读取当前可读节点
     return &f->queue[(f->rindex + f->rindex_shown) % f->max_size];
 }
 
@@ -856,7 +871,7 @@ static void frame_queue_next(FrameQueue *f)
 **/
 static int frame_queue_nb_remaining(FrameQueue *f)
 {
-    return f->size - f->rindex_shown;
+    return f->size - f->rindex_shown;//解码后队列的大小减去读过的帧队列的索引，剩下的就是还没显示的帧数
 }
 
 /* return last shown position */
@@ -1432,7 +1447,7 @@ static double get_clock(Clock *c)
 {
     if (*c->queue_serial != c->serial)
         return NAN;
-    if (c->paused) {
+    if (c->paused) {//如果暂停，直接返回pts值
         return c->pts;
     } else {
         double time = av_gettime_relative() / 1000000.0;
@@ -1453,13 +1468,18 @@ static void set_clock(Clock *c, double pts, int serial)
     double time = av_gettime_relative() / 1000000.0;
     set_clock_at(c, pts, serial, time);
 }
-
+/*
+*设置时钟速度
+*/
 static void set_clock_speed(Clock *c, double speed)
 {
     set_clock(c, get_clock(c), c->serial);
     c->speed = speed;
 }
 
+/**
+*初始化时钟
+**/
 static void init_clock(Clock *c, int *queue_serial)
 {
     c->speed = 1.0;
