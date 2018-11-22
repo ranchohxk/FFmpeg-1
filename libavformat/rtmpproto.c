@@ -2743,6 +2743,7 @@ reconnect:
     //extract "app" part from path
     qmark = strchr(path, '?');
     if (qmark && strstr(qmark, "slist=")) {
+		av_log(NULL,AV_LOG_ERROR,"hxk>>>1\n");
         char* amp;
         // After slist we have the playpath, the full path is used as app
         av_strlcpy(rt->app, path + 1, APP_MAX_LENGTH);
@@ -2755,9 +2756,11 @@ reconnect:
             fname = fname_buffer;
         }
     } else if (!strncmp(path, "/ondemand/", 10)) {
+    	av_log(NULL,AV_LOG_ERROR,"hxk>>>2\n");
         fname = path + 10;
         memcpy(rt->app, "ondemand", 9);
     } else {
+		av_log(NULL,AV_LOG_ERROR,"hxk>>>3\n");
         char *next = *path ? path + 1 : path;
         char *p = strchr(next, '/');
         if (!p) {
@@ -2782,7 +2785,7 @@ reconnect:
             }
         }
     }
-
+	//这里是null,没进入
     if (old_app) {
         // The name of application has been defined by the user, override it.
         if (strlen(old_app) >= APP_MAX_LENGTH) {
@@ -2793,6 +2796,7 @@ reconnect:
         rt->app = old_app;
     }
 	
+	av_log(NULL,AV_LOG_ERROR,"hxk>>>rt->playpath:%s\n",rt->playpath);
 
     if (!rt->playpath) {
         rt->playpath = av_malloc(PLAYPATH_MAX_LENGTH);
@@ -2800,7 +2804,7 @@ reconnect:
             ret = AVERROR(ENOMEM);
             goto fail;
         }
-
+       //fname:hunantv
         if (fname) {
             int len = strlen(fname);
             if (!strchr(fname, ':') && len >= 4 &&
@@ -2817,6 +2821,7 @@ reconnect:
             rt->playpath[0] = '\0';
         }
     }
+	av_log(NULL,AV_LOG_ERROR,"hxk>>>rt->tcurl:%s\n",rt->tcurl);
 
     if (!rt->tcurl) {
         rt->tcurl = av_malloc(TCURL_MAX_LENGTH);
@@ -2827,6 +2832,7 @@ reconnect:
         ff_url_join(rt->tcurl, TCURL_MAX_LENGTH, proto, NULL, hostname,
                     port, "/%s", rt->app);
     }
+	av_log(NULL,AV_LOG_ERROR,"hxk>>>rt->flashver:%s\n",rt->flashver);
 
     if (!rt->flashver) {
         rt->flashver = av_malloc(FLASHVER_MAX_LENGTH);
@@ -2868,7 +2874,7 @@ reconnect:
     } while (ret == AVERROR(EAGAIN));
     if (ret < 0)
         goto fail;
-
+	//重连
     if (rt->do_reconnect) {
         int i;
         ffurl_close(rt->stream);
@@ -2881,6 +2887,7 @@ reconnect:
         free_tracked_methods(rt);
         goto reconnect;
     }
+	av_log(NULL,AV_LOG_ERROR,"hxk>>>rt->is_input:%d\n",rt->is_input);
 
     if (rt->is_input) {
         // generate FLV header for demuxer

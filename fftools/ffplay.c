@@ -117,22 +117,22 @@ const int program_birth_year = 2003;
 #define USE_ONEPASS_SUBTITLE_RENDER 1
 //重采样标志
 static unsigned sws_flags = SWS_BICUBIC;
-// 包列表结构
+// 链表元素结构体
 typedef struct MyAVPacketList {
-    AVPacket pkt;
-    struct MyAVPacketList *next;
-    int serial;
+    AVPacket pkt;//解封装后的数据
+    struct MyAVPacketList *next;//指向下一个元素
+    int serial;//当前节点的序列号
 } MyAVPacketList;
-// 待解码包队列
+// 待解码包队列，先进FIFO队列
 typedef struct PacketQueue {
-    MyAVPacketList *first_pkt, *last_pkt;
-    int nb_packets;
-    int size;
-    int64_t duration;
-    int abort_request;
-    int serial;
-    SDL_mutex *mutex;
-    SDL_cond *cond;
+    MyAVPacketList *first_pkt, *last_pkt;//队首，队尾
+    int nb_packets;//队列中一共有多少个节点
+    int size;//队列所有节点字节总数，用于计算cache大小
+    int64_t duration;//队列所有节点的合计时长
+    int abort_request;//是否要中止队列操作，用于安全快速退出播放
+    int serial;//序列号，和MyAVPacketList的serial作用相同，但改变的时序稍微有点不同
+    SDL_mutex *mutex;//用于维持PacketQueue的多线程安全(SDL_mutex可以按pthread_mutex_t理解）
+    SDL_cond *cond;//用于读、写线程相互通知(SDL_cond可以按pthread_cond_t理解)
 } PacketQueue;
 
 #define VIDEO_PICTURE_QUEUE_SIZE 3
@@ -148,7 +148,7 @@ typedef struct AudioParams {
     int frame_size;//采样大小
     int bytes_per_sec;//每秒多少字节
 } AudioParams;
-
+//时钟
 typedef struct Clock {
     double pts;           /* 时钟基准clock base */
     double pts_drift;     /* 更新时钟的差值clock base minus time at which we updated the clock */
@@ -161,8 +161,8 @@ typedef struct Clock {
 
 /* 解码后帧的结构Common struct for handling all types of decoded data and allocated render buffers. */
 typedef struct Frame {  
-    AVFrame *frame;        //帧数据
-    AVSubtitle sub;
+    AVFrame *frame;        //视频或音频的解码数据
+    AVSubtitle sub;//解码的字幕数据
     int serial;            //序列
     double pts;           /*帧的显示时间戳presentation timestamp for the frame */
     double duration;      /* 帧显示时长estimated duration of the frame */
@@ -176,16 +176,16 @@ typedef struct Frame {
 } Frame;
 /*解码后的帧队列*/
 typedef struct FrameQueue {
-    Frame queue[FRAME_QUEUE_SIZE];//队列数组
+    Frame queue[FRAME_QUEUE_SIZE];//队列数组,用数组模拟队列
     int rindex;//读索引
     int windex;//写索引
-    int size;//大小
-    int max_size;//最大大小
-    int keep_last;//保持上一个
-    int rindex_shown;//读显示
+    int size;//大小,当前存储的节点个数(或者说，当前已写入的节点个数)
+    int max_size;//最大允许存储的节点个数
+    int keep_last;//是否要保留最后一个读节点
+    int rindex_shown;//当前节点是否已经显示
     SDL_mutex *mutex;//互斥变量
     SDL_cond *cond;//条件变量
-    PacketQueue *pktq;
+    PacketQueue *pktq;//关联的PacketQueue
 } FrameQueue;
 //时钟同步类型
 enum {
@@ -295,7 +295,7 @@ typedef struct VideoState {
     double frame_last_filter_delay;// 上一个过滤器延时
     int video_stream;// 视频码流Id
     AVStream *video_st; // 视频码流
-    PacketQueue videoq;// 视频包队列
+    PacketQueue videoq;// 未解码的视频包队列
     double max_frame_duration;      //最大帧显示时间maximum duration of a frame - above this, we consider the jump a timestamp discontinuity
     struct SwsContext *img_convert_ctx;// 视频转码上下文
     struct SwsContext *sub_convert_ctx;// 字幕转码上下文
@@ -447,32 +447,34 @@ int64_t get_valid_channel_layout(int64_t channel_layout, int channels)
 static int packet_queue_put_private(PacketQueue *q, AVPacket *pkt)
 {
     MyAVPacketList *pkt1;
-
+    //如果已中止，则放入失败
     if (q->abort_request)
        return -1;
 
     pkt1 = av_malloc(sizeof(MyAVPacketList));
-    if (!pkt1)
+    if (!pkt1)//内存不足，则放入失败
         return -1;
-    pkt1->pkt = *pkt;
+    pkt1->pkt = *pkt;//拷贝AVPacket(浅拷贝，AVPacket.data等内存并没有拷贝)
     pkt1->next = NULL;
-    if (pkt == &flush_pkt)
+    if (pkt == &flush_pkt)//如果放入的是flush_pkt，需要增加队列的序列号，以区分不连续的两段数据
         q->serial++;
-    pkt1->serial = q->serial;
-
-    if (!q->last_pkt)
+    pkt1->serial = q->serial;//用队列序列号标记节点
+	//队列操作：如果last_pkt为空，说明队列是空的，新增节点为队头；否则，队列有数据，则让原队尾的next为新增节点。 最后将队尾指向新增节点
+    if (!q->last_pkt)//队列尾为空，也就是队列为空的话
         q->first_pkt = pkt1;
-    else
+    else//队列有数据，则让原队尾的next为新增节点
         q->last_pkt->next = pkt1;
-    q->last_pkt = pkt1;
-    q->nb_packets++;
-    q->size += pkt1->pkt.size + sizeof(*pkt1);
-    q->duration += pkt1->pkt.duration;
+    q->last_pkt = pkt1;//最后将队尾指向新增节点
+    q->nb_packets++;//增加节点数
+    q->size += pkt1->pkt.size + sizeof(*pkt1);//更新队列大小，也就是cache大小
+    q->duration += pkt1->pkt.duration;//更新cache时长，也就是队列时长
     /* XXX: should duplicate packet data in DV case */
+	//发出信号，表明当前队列中有数据了，通知等待中的读线程可以取数据了
     SDL_CondSignal(q->cond);
     return 0;
 }
-
+//入队API，调用此函数是线程安全的
+//由于视频解码线程，音频播放（主线程）同时访问包队列，所以需要加互斥锁
 static int packet_queue_put(PacketQueue *q, AVPacket *pkt)
 {
     int ret;
@@ -482,11 +484,17 @@ static int packet_queue_put(PacketQueue *q, AVPacket *pkt)
     SDL_UnlockMutex(q->mutex);
 
     if (pkt != &flush_pkt && ret < 0)
-        av_packet_unref(pkt);
+        av_packet_unref(pkt);//放入失败，释放AVPacket
 
     return ret;
 }
 
+/**
+*放一个空包packet到队列中
+packet_queue_put_nullpacket放入“空包”。放入空包意味着流的结束，
+一般在视频读取完成的时候放入空包。
+该函数的实现很明了，构建一个空包，然后调用packet_queue_put
+*/
 static int packet_queue_put_nullpacket(PacketQueue *q, int stream_index)
 {
     AVPacket pkt1, *pkt = &pkt1;
@@ -497,10 +505,11 @@ static int packet_queue_put_nullpacket(PacketQueue *q, int stream_index)
     return packet_queue_put(q, pkt);
 }
 
-/* packet queue handling */
+/* 队列初始化packet queue handling */
 static int packet_queue_init(PacketQueue *q)
 {
     memset(q, 0, sizeof(PacketQueue));
+	//创建mutex和cond
     q->mutex = SDL_CreateMutex();
     if (!q->mutex) {
         av_log(NULL, AV_LOG_FATAL, "SDL_CreateMutex(): %s\n", SDL_GetError());
@@ -514,7 +523,9 @@ static int packet_queue_init(PacketQueue *q)
     q->abort_request = 1;
     return 0;
 }
-
+/*清空队列，清除队列内所有的节点
+用于将队列中的所有节点清除。比如用于销毁队列、seek操作等
+*/
 static void packet_queue_flush(PacketQueue *q)
 {
     MyAVPacketList *pkt, *pkt1;
@@ -532,14 +543,15 @@ static void packet_queue_flush(PacketQueue *q)
     q->duration = 0;
     SDL_UnlockMutex(q->mutex);
 }
-
+//释放队列空间
 static void packet_queue_destroy(PacketQueue *q)
 {
-    packet_queue_flush(q);
+    packet_queue_flush(q);//先清除所有节点
+    //清理mutex和cond
     SDL_DestroyMutex(q->mutex);
     SDL_DestroyCond(q->cond);
 }
-
+//终止packetqueue队列
 static void packet_queue_abort(PacketQueue *q)
 {
     SDL_LockMutex(q->mutex);
@@ -551,15 +563,21 @@ static void packet_queue_abort(PacketQueue *q)
     SDL_UnlockMutex(q->mutex);
 }
 
+//队列开启
 static void packet_queue_start(PacketQueue *q)
 {
     SDL_LockMutex(q->mutex);
     q->abort_request = 0;
-    packet_queue_put_private(q, &flush_pkt);
+    packet_queue_put_private(q, &flush_pkt);//这里放入了一个flush_pkt
     SDL_UnlockMutex(q->mutex);
 }
 
-/* return < 0 if aborted, 0 if no packet and > 0 if packet.  */
+/*
+//出队操作，从包队列中取出一个包 
+//return < 0 if aborted, 0 if no packet and > 0 if packet.  */
+//block: 调用者是否需要在没节点可取的情况下阻塞等待
+//AVPacket: 输出参数，即MyAVPacketList.pkt
+//serial: 输出参数，即MyAVPacketList.serial
 static int packet_queue_get(PacketQueue *q, AVPacket *pkt, int block, int *serial)
 {
     MyAVPacketList *pkt1;
@@ -568,30 +586,30 @@ static int packet_queue_get(PacketQueue *q, AVPacket *pkt, int block, int *seria
     SDL_LockMutex(q->mutex);
 
     for (;;) {
-        if (q->abort_request) {
+        if (q->abort_request) {//如果需要退出
             ret = -1;
             break;
         }
 
-        pkt1 = q->first_pkt;
-        if (pkt1) {
-            q->first_pkt = pkt1->next;
+        pkt1 = q->first_pkt;//MyAVPacketList *pkt1; 从队头拿数据
+        if (pkt1) {//队列中有数据
+            q->first_pkt = pkt1->next;//队头移到第二个节点
             if (!q->first_pkt)
                 q->last_pkt = NULL;
-            q->nb_packets--;
-            q->size -= pkt1->pkt.size + sizeof(*pkt1);
-            q->duration -= pkt1->pkt.duration;
-            *pkt = pkt1->pkt;
-            if (serial)
+            q->nb_packets--;//节点数减1
+            q->size -= pkt1->pkt.size + sizeof(*pkt1);//cache大小扣除一个节点
+            q->duration -= pkt1->pkt.duration;//总时长扣除一个节点
+            *pkt = pkt1->pkt;//返回AVPacket，这里发生一次AVPacket结构体拷贝，AVPacket的data只拷贝了指针
+            if (serial)//如果需要输出serial，把serial输出
                 *serial = pkt1->serial;
-            av_free(pkt1);
+            av_free(pkt1);//释放节点内存
             ret = 1;
             break;
-        } else if (!block) {
+        } else if (!block) {//队列中没有数据，且非阻塞调用
             ret = 0;
             break;
-        } else {
-            SDL_CondWait(q->cond, q->mutex);
+        } else {//队列中没有数据，且阻塞调用
+            SDL_CondWait(q->cond, q->mutex);;//这里没有break。for循环的另一个作用是在条件变量满足后重复上述代码取出节点
         }
     }
     SDL_UnlockMutex(q->mutex);
@@ -3046,6 +3064,7 @@ static int read_thread(void *arg)
                 av_log(NULL, AV_LOG_ERROR,
                        "%s: error while seeking\n", is->ic->filename);
             } else {
+				//seek的时候清空队列
                 if (is->audio_stream >= 0) {
                     packet_queue_flush(&is->audioq);//刷新队列
                     packet_queue_put(&is->audioq, &flush_pkt);//放数据
