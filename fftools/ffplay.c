@@ -182,7 +182,7 @@ typedef struct FrameQueue {
     int size;//大小,当前存储的节点个数(或者说，当前已写入的节点个数)
     int max_size;//最大允许存储的节点个数
     int keep_last;//是否要保留最后一个读节点
-    int rindex_shown;//当前节点是否已经显示索引
+    int rindex_shown;//当前节点是否已经显示
     SDL_mutex *mutex;//互斥变量
     SDL_cond *cond;//条件变量
     PacketQueue *pktq;//关联的PacketQueue，指向各自数据包(ES包)的队列
@@ -195,9 +195,9 @@ enum {
 };
 // 解码器结构
 typedef struct Decoder {
-    AVPacket pkt;
+    AVPacket pkt;//解码前包
     PacketQueue *queue; // 包队列
-    AVCodecContext *avctx;
+    AVCodecContext *avctx;//解码器结构体
     int pkt_serial;// 包序列
     int finished; // 是否已经结束
     int packet_pending; // 是否有包在等待
@@ -834,29 +834,34 @@ static Frame *frame_queue_peek_readable(FrameQueue *f)
 	//如果有退出请求，则返回null
     if (f->pktq->abort_request)
         return NULL;
-	//读取当前可读节点
+	//读取当前可读节点，2%5= 2；3%5=3；
     return &f->queue[(f->rindex + f->rindex_shown) % f->max_size];
 }
-
+/**
+*往解码后帧队列中放数据
+**/
 static void frame_queue_push(FrameQueue *f)
 {
     if (++f->windex == f->max_size)
         f->windex = 0;
     SDL_LockMutex(f->mutex);
-    f->size++;
+    f->size++;//当前写入个数++
     SDL_CondSignal(f->cond);
     SDL_UnlockMutex(f->mutex);
 }
 /**
-*下一帧
+*用于标记一个节点已经被读过
 **/
 static void frame_queue_next(FrameQueue *f)
 {
+	 //如果支持keep_last，且rindex_shown为0，则rindex_shown赋1，返回
+	 //rindex_shown为0表示没读，则rindex_shown赋1，表示这个节点已经读过了
     if (f->keep_last && !f->rindex_shown) {
         f->rindex_shown = 1;
         return;
     }
-    frame_queue_unref_item(&f->queue[f->rindex]);
+	//否则，移动rindex指针，并减小size
+    frame_queue_unref_item(&f->queue[f->rindex]);//释放关联内存
     if (++f->rindex == f->max_size)
         f->rindex = 0;
     SDL_LockMutex(f->mutex);
@@ -866,7 +871,7 @@ static void frame_queue_next(FrameQueue *f)
 }
 
 /**
-*返回队列中剩余帧的数量(还没显示的帧）
+*返回队列中剩余帧的数量(还没显示的帧），也就是返回队列中待显示帧数量
 *return the number of undisplayed frames in the queue 
 **/
 static int frame_queue_nb_remaining(FrameQueue *f)
@@ -1641,11 +1646,11 @@ static double compute_target_delay(double delay, VideoState *is)
     return delay;
 }
 /**
-*计算显示时长
+*计算一帧的显示时长
 **/
 static double vp_duration(VideoState *is, Frame *vp, Frame *nextvp) {
     if (vp->serial == nextvp->serial) {
-        double duration = nextvp->pts - vp->pts;
+        double duration = nextvp->pts - vp->pts;//上一帧时间戳减去下一帧时间戳
         if (isnan(duration) || duration <= 0 || duration > is->max_frame_duration)
             return vp->duration;
         else
@@ -1728,7 +1733,7 @@ retry:
             if (!isnan(vp->pts))
                 update_video_pts(is, vp->pts, vp->pos, vp->serial);
             SDL_UnlockMutex(is->pictq.mutex);
-            //判断是否还有剩余的帧
+            //判断是否还有剩余的帧，如果剩余帧数大于1
             if (frame_queue_nb_remaining(&is->pictq) > 1) {
 				//取得下一帧
                 Frame *nextvp = frame_queue_peek_next(&is->pictq);
@@ -1737,6 +1742,7 @@ retry:
 			    //判断是否需要丢弃一部分帧
                 if(!is->step && (framedrop>0 || (framedrop && get_master_sync_type(is) != AV_SYNC_VIDEO_MASTER)) && time > is->frame_timer + duration){
                     is->frame_drops_late++;
+					//标记这个节点被读过了
                     frame_queue_next(&is->pictq);
                     goto retry;
                 }
