@@ -174,15 +174,15 @@ typedef struct Frame {
     int uploaded;         //上载
     int flip_v;           //反转
 } Frame;
-/*解码后的帧队列*/
+/*解码后的帧队列，用数组实现的环形缓冲区*/
 typedef struct FrameQueue {
     Frame queue[FRAME_QUEUE_SIZE];//队列数组,用数组模拟队列
     int rindex;//读帧数据索引，表示循环队列的队首
     int windex;//写帧数据索引，/表示循环队列的对尾
     int size;//大小,当前存储的节点个数(或者说，当前已写入的节点个数)
     int max_size;//最大允许存储的节点个数
-    int keep_last;//是否要保留最后一个读节点
-    int rindex_shown;//当前节点是否已经显示
+    int keep_last;//是否在环形缓冲区的读写过程中保留最后一个读节点不被覆写
+    int rindex_shown;//rindex_shown表示rindex指向的节点是否被读过，如果被读过， 为1，反之，为0
     SDL_mutex *mutex;//互斥变量
     SDL_cond *cond;//条件变量
     PacketQueue *pktq;//关联的PacketQueue，指向各自数据包(ES包)的队列
@@ -736,7 +736,7 @@ static void frame_queue_unref_item(Frame *vp)
 static int frame_queue_init(FrameQueue *f, PacketQueue *pktq, int max_size, int keep_last)
 {
     int i;
-    memset(f, 0, sizeof(FrameQueue));
+    memset(f, 0, sizeof(FrameQueue));//初始化framequeue队列
     if (!(f->mutex = SDL_CreateMutex())) {
         av_log(NULL, AV_LOG_FATAL, "SDL_CreateMutex(): %s\n", SDL_GetError());
         return AVERROR(ENOMEM);
@@ -747,9 +747,9 @@ static int frame_queue_init(FrameQueue *f, PacketQueue *pktq, int max_size, int 
     }
     f->pktq = pktq;
     f->max_size = FFMIN(max_size, FRAME_QUEUE_SIZE);
-    f->keep_last = !!keep_last;
+    f->keep_last = !!keep_last;//两个!是为了把非0值转换成1,而0值还是0，keep_last这里传的是1，所以f->keep_last是1
     for (i = 0; i < f->max_size; i++)
-        if (!(f->queue[i].frame = av_frame_alloc()))
+        if (!(f->queue[i].frame = av_frame_alloc()))//申请队列中frame的内存
             return AVERROR(ENOMEM);
     return 0;
 }
@@ -775,8 +775,7 @@ static void frame_queue_signal(FrameQueue *f)
     SDL_UnlockMutex(f->mutex);
 }
 /**
-*查找/定位帧
-表示从循环队列帧里面取出当前需要显示的一帧视频
+*表示从循环队列帧里面取出当前需要显示的一帧视频
 **/
 static Frame *frame_queue_peek(FrameQueue *f)
 {
@@ -787,7 +786,7 @@ static Frame *frame_queue_peek(FrameQueue *f)
 */
 static Frame *frame_queue_peek_next(FrameQueue *f)
 {
-    return &f->queue[(f->rindex + f->rindex_shown + 1) % f->max_size];
+    return &f->queue[(f->rindex + f->rindex_shown + 1) % f->max_size];//2%5 = 2,3%5 = 3;
 }
 
 /**
@@ -824,8 +823,8 @@ static Frame *frame_queue_peek_readable(FrameQueue *f)
 {
     /* wait until we have a readable a new frame */
     SDL_LockMutex(f->mutex);
-	//判断是否有可读节点，如果节点数减去当前显示节点，
-	//也就是剩余可读节点数小于0的话，那么就说明队列中没有可读节点,需要等
+	//判断是否有可读节点，如果节点数减去1，
+	av_log(NULL,AV_LOG_ERROR,"f->rindex_shown:%d\n",f->rindex_shown);
     while (f->size - f->rindex_shown <= 0 &&
            !f->pktq->abort_request) {
         SDL_CondWait(f->cond, f->mutex);
@@ -835,7 +834,7 @@ static Frame *frame_queue_peek_readable(FrameQueue *f)
     if (f->pktq->abort_request)
         return NULL;
 	//读取当前可读节点，2%5= 2；3%5=3；
-    return &f->queue[(f->rindex + f->rindex_shown) % f->max_size];
+    return &f->queue[(f->rindex + f->rindex_shown) % f->max_size]; //因为rindex加1后可能超过max_size，所以这里取余
 }
 /**
 *往解码后帧队列中放数据
@@ -854,7 +853,7 @@ static void frame_queue_push(FrameQueue *f)
 **/
 static void frame_queue_next(FrameQueue *f)
 {
-	 //如果支持keep_last，且rindex_shown为0，则rindex_shown赋1，返回
+	 //如果支持keep_last，这里keep_last为1，且rindex_shown为0，则rindex_shown赋1，返回
 	 //rindex_shown为0表示没读，则rindex_shown赋1，表示这个节点已经读过了
     if (f->keep_last && !f->rindex_shown) {
         f->rindex_shown = 1;
