@@ -2910,9 +2910,12 @@ static int read_thread(void *arg)
     }
 	// 打开文件
     err = avformat_open_input(&ic, is->filename, is->iformat, &format_opts);
+	//打开文件出错，如解析文件出错等
     if (err < 0) {
+		//打印出错的文件信息
         print_error(is->filename, err);
         ret = -1;
+	    //跳转到失败
         goto fail;
     }
     if (scan_all_pmts_set)

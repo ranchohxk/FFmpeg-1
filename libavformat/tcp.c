@@ -80,7 +80,7 @@ static int tcp_open(URLContext *h, const char *uri, int flags)
     char hostname[1024],proto[1024],path[1024];
     char portstr[10];
     s->open_timeout = 5000000;//tcp打开超时 5秒
-	//解析uri  ，uri就是（tcp://主机名：端口号）,，例如：tcp://221.228.226.23:80
+	//解析uri  ，uri就是（tcp://主机名：端口号）,，例如：tcp://videocdn.eebbk.net:80
     av_url_split(proto, sizeof(proto), NULL, 0, hostname, sizeof(hostname),
         &port, path, sizeof(path), uri);
 	//如果开头不是tcp，直接报错

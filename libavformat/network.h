@@ -125,7 +125,7 @@ typedef union sockaddr_union {
 
 #if !HAVE_STRUCT_ADDRINFO
 struct addrinfo {
-    int ai_flags;
+    int ai_flags;//指示在getaddrinfo函数中使用的选项的标志
     int ai_family;
     int ai_socktype;
     int ai_protocol;
