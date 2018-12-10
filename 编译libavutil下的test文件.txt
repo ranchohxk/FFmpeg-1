@@ -1,0 +1,9 @@
+在ffmpeg目录下
+make libavutil/tests/tree
+然后直接取tests目录下
+./tree
+
+如果需要编译md5
+make libavutil/tests/md5
+然后直接取tests目录下
+./md5

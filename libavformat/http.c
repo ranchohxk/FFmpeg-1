@@ -426,6 +426,7 @@ static int http_write_reply(URLContext* h, int status_code)
         return AVERROR(EINVAL);
     }
     if (body) {
+		
         s->chunked_post = 0;
         message_len = snprintf(message, sizeof(message),
                  "HTTP/1.1 %03d %s\r\n"

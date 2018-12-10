@@ -3936,6 +3936,15 @@ int main(int argc, char **argv)
         av_log(NULL, AV_LOG_FATAL, "Could not initialize lock manager!\n");
         do_exit(NULL);
     }
+
+	/////////////////////////////
+	av_log(NULL, AV_LOG_ERROR, "AVERROR_AVERROR_HTTP_NOT_FOUND:%d\n",AVERROR_HTTP_NOT_FOUND);
+	av_log(NULL, AV_LOG_ERROR, "AVERROR_UNKNOWN:%d\n",AVERROR_UNKNOWN);
+	av_log(NULL, AV_LOG_ERROR, "AVERROR_INVALIDDATA:%d\n",AVERROR_INVALIDDATA);
+
+	av_log(NULL, AV_LOG_ERROR, "AVERROR_HTTP_SERVER_ERROR:%d\n",AVERROR_HTTP_SERVER_ERROR);
+    
+	/////////////////////////////
 	// 初始化裸数据包
     av_init_packet(&flush_pkt);
     flush_pkt.data = (uint8_t *)&flush_pkt;
