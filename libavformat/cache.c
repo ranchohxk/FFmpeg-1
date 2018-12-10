@@ -53,7 +53,7 @@ typedef struct CacheEntry {
 
 typedef struct Context {
     AVClass *class;
-    int fd;
+    int fd;//ÎÄ¼şÃèÊö·û
     struct AVTreeNode *root;
     int64_t logical_pos;
     int64_t cache_pos;
@@ -61,7 +61,7 @@ typedef struct Context {
     int64_t end;
     int is_true_eof;
     URLContext *inner;
-    int64_t cache_hit, cache_miss;
+    int64_t cache_hit, cache_miss;//»º´æ»÷ÖĞ£¬»º´æ¶ªÊ§
     int read_ahead_limit;
 } Context;
 
@@ -76,7 +76,6 @@ static int cache_open(URLContext *h, const char *arg, int flags, AVDictionary **
     Context *c= h->priv_data;
 
     av_strstart(arg, "cache:", &arg);
-
     c->fd = avpriv_tempfile("ffcache", &buffername, 0, h);
     if (c->fd < 0){
         av_log(h, AV_LOG_ERROR, "Failed to create tempfile\n");

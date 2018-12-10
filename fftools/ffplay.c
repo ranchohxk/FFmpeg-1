@@ -824,7 +824,6 @@ static Frame *frame_queue_peek_readable(FrameQueue *f)
     /* wait until we have a readable a new frame */
     SDL_LockMutex(f->mutex);
 	//判断是否有可读节点，如果节点数减去1，
-	av_log(NULL,AV_LOG_ERROR,"f->rindex_shown:%d\n",f->rindex_shown);
     while (f->size - f->rindex_shown <= 0 &&
            !f->pktq->abort_request) {
         SDL_CondWait(f->cond, f->mutex);
@@ -3937,14 +3936,6 @@ int main(int argc, char **argv)
         do_exit(NULL);
     }
 
-	/////////////////////////////
-	av_log(NULL, AV_LOG_ERROR, "AVERROR_AVERROR_HTTP_NOT_FOUND:%d\n",AVERROR_HTTP_NOT_FOUND);
-	av_log(NULL, AV_LOG_ERROR, "AVERROR_UNKNOWN:%d\n",AVERROR_UNKNOWN);
-	av_log(NULL, AV_LOG_ERROR, "AVERROR_INVALIDDATA:%d\n",AVERROR_INVALIDDATA);
-
-	av_log(NULL, AV_LOG_ERROR, "AVERROR_HTTP_SERVER_ERROR:%d\n",AVERROR_HTTP_SERVER_ERROR);
-    
-	/////////////////////////////
 	// 初始化裸数据包
     av_init_packet(&flush_pkt);
     flush_pkt.data = (uint8_t *)&flush_pkt;

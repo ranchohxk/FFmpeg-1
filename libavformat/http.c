@@ -1164,9 +1164,7 @@ static int http_read_header(URLContext *h, int *new_location)
     for (;;) {
 		//循环取请求头
         if ((err = http_get_line(s, line, sizeof(line))) < 0)
-            return err;
-        av_log(h, AV_LOG_ERROR, "header='%s'\n", line);
-        
+            return err;        
         err = process_line(h, line, s->line_count, new_location);
         if (err < 0)
             return err;
