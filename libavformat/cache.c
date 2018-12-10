@@ -61,7 +61,7 @@ typedef struct Context {
     int64_t end;
     int is_true_eof;
     URLContext *inner;
-    int64_t cache_hit, cache_miss;//»º´æ»÷ÖĞ£¬»º´æ¶ªÊ§
+    int64_t cache_hit, cache_miss;
     int read_ahead_limit;
 } Context;
 
@@ -77,7 +77,8 @@ static int cache_open(URLContext *h, const char *arg, int flags, AVDictionary **
 
     av_strstart(arg, "cache:", &arg);
     c->fd = avpriv_tempfile("ffcache", &buffername, 0, h);
-    if (c->fd < 0){
+	av_log(NULL,AV_LOG_ERROR,"hxk>>>buffername:%s\n",buffername);
+    if (c->fd < 0) {
         av_log(h, AV_LOG_ERROR, "Failed to create tempfile\n");
         return c->fd;
     }

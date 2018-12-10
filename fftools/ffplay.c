@@ -3878,7 +3878,7 @@ int main(int argc, char **argv)
 	//解析log设置级别
     parse_loglevel(argc, argv, options);
 	//修改为默认打印info等级log，方便调试查看log
-	av_log_set_level(AV_LOG_DEBUG);
+	//av_log_set_level(AV_LOG_DEBUG);
 
     /* register all codecs, demux and protocols */
 #if CONFIG_AVDEVICE
