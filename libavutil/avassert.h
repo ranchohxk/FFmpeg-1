@@ -32,6 +32,7 @@
 #include "log.h"
 
 /**
+ * 如果cond是0的话，执行abort
  * assert() equivalent, that is always enabled.
  */
 #define av_assert0(cond) do {                                           \

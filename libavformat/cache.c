@@ -74,10 +74,11 @@ static int cache_open(URLContext *h, const char *arg, int flags, AVDictionary **
 {
     char *buffername;
     Context *c= h->priv_data;
-
+    //检查cache，去除cache协议
     av_strstart(arg, "cache:", &arg);
+	//获取临时文件的路径和地址，如/tmp/ffcacheaexsEB
     c->fd = avpriv_tempfile("ffcache", &buffername, 0, h);
-	av_log(NULL,AV_LOG_ERROR,"hxk>>>buffername:%s\n",buffername);
+	
     if (c->fd < 0) {
         av_log(h, AV_LOG_ERROR, "Failed to create tempfile\n");
         return c->fd;
@@ -106,37 +107,41 @@ static int add_entry(URLContext *h, const unsigned char *buf, int size)
         av_log(h, AV_LOG_ERROR, "seek in cache failed\n");
         goto fail;
     }
+	//缓存文件的位置
     c->cache_pos = pos;
-
+    //把buf写入到fd中
     ret = write(c->fd, buf, size);
     if (ret < 0) {
         ret = AVERROR(errno);
         av_log(h, AV_LOG_ERROR, "write in cache failed\n");
         goto fail;
     }
+	//缓存位置加上写入到缓存文件的长度
     c->cache_pos += ret;
 
     entry = av_tree_find(c->root, &c->logical_pos, cmp, (void**)next);
 
     if (!entry)
         entry = next[0];
-
+    //如果entry等于null的话或者？？？
     if (!entry ||
         entry->logical_pos  + entry->size != c->logical_pos ||
         entry->physical_pos + entry->size != pos
     ) {
+        //申请entry
         entry = av_malloc(sizeof(*entry));
+		//申请node
         node = av_tree_node_alloc();
         if (!entry || !node) {
             ret = AVERROR(ENOMEM);
             goto fail;
         }
-        entry->logical_pos = c->logical_pos;
-        entry->physical_pos = pos;
+        entry->logical_pos = c->logical_pos;//逻辑地址
+        entry->physical_pos = pos;//物理地址
         entry->size = ret;
 
         entry_ret = av_tree_insert(&c->root, entry, cmp, &node);
-        if (entry_ret && entry_ret != entry) {
+        if (entry_ret && entry_ret != entry) {//如果返回值不等于插入值，返回失败
             ret = -1;
             av_log(h, AV_LOG_ERROR, "av_tree_insert failed\n");
             goto fail;
@@ -156,14 +161,13 @@ fail:
 static int cache_read(URLContext *h, unsigned char *buf, int size)
 {
     Context *c= h->priv_data;
-    CacheEntry *entry, *next[2] = {NULL, NULL};
+    CacheEntry *entry, *next[2] = {NULL, NULL};//指针数组，数组里的元素都是指针
     int64_t r;
-
+    //从tree中获取entry
     entry = av_tree_find(c->root, &c->logical_pos, cmp, (void**)next);
-
     if (!entry)
         entry = next[0];
-
+	//如果获取到entry
     if (entry) {
         int64_t in_block_pos = c->logical_pos - entry->logical_pos;
         av_assert0(entry->logical_pos <= c->logical_pos);
@@ -201,6 +205,7 @@ static int cache_read(URLContext *h, unsigned char *buf, int size)
     }
 
     r = ffurl_read(c->inner, buf, size);
+	av_log(NULL,AV_LOG_ERROR,"r:%ld,size:%d\n",r,size);
     if (r == 0 && size>0) {
         c->is_true_eof = 1;
         av_assert0(c->end >= c->logical_pos);
@@ -295,8 +300,9 @@ static int cache_close(URLContext *h)
 
     av_log(h, AV_LOG_INFO, "Statistics, cache hits:%"PRId64" cache misses:%"PRId64"\n",
            c->cache_hit, c->cache_miss);
-
+    //关闭url
     close(c->fd);
+	//关闭urlcontext
     ffurl_close(c->inner);
     av_tree_enumerate(c->root, NULL, NULL, enu_free);
     av_tree_destroy(c->root);

@@ -38,7 +38,7 @@ extern const AVClass ffurl_context_class;
 typedef struct URLContext {
     const AVClass *av_class;    /**< information for av_log(). Set by url_open(). */
     const struct URLProtocol *prot;//URLProtocol结构体
-    void *priv_data;
+    void *priv_data;             /**协议中的Context*/
     char *filename;             /**< specified URL */
     int flags;
     int max_packet_size;        /**< if non zero, the stream is packetized with this max packet size */
@@ -65,6 +65,7 @@ typedef struct URLProtocol {
     int     (*url_handshake)(URLContext *c);
 
     /**
+     * 从协议中读取数据
      * Read data from the protocol.
      * If data is immediately available (even less than size), EOF is
      * reached or an error occurs (including EINTR), return immediately.

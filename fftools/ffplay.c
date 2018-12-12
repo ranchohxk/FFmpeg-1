@@ -2980,7 +2980,7 @@ static int read_thread(void *arg)
 
     if (show_status)
         av_dump_format(ic, 0, is->filename, 0);
-
+	//根据用户指定来查找流
     for (i = 0; i < ic->nb_streams; i++) {
         AVStream *st = ic->streams[i];
         enum AVMediaType type = st->codecpar->codec_type;
@@ -2996,19 +2996,19 @@ static int read_thread(void *arg)
         }
     }
 	// 是否禁止视频流
-    if (!video_disable)
+    if (!video_disable)//利用av_find_best_stream选择流
         st_index[AVMEDIA_TYPE_VIDEO] =
             av_find_best_stream(ic, AVMEDIA_TYPE_VIDEO,
                                 st_index[AVMEDIA_TYPE_VIDEO], -1, NULL, 0);
 	 // 是否禁止音频流
-    if (!audio_disable)
+    if (!audio_disable)//利用av_find_best_stream选择流
         st_index[AVMEDIA_TYPE_AUDIO] =
             av_find_best_stream(ic, AVMEDIA_TYPE_AUDIO,
                                 st_index[AVMEDIA_TYPE_AUDIO],
                                 st_index[AVMEDIA_TYPE_VIDEO],
                                 NULL, 0);
 	//是否禁止音视频流
-    if (!video_disable && !subtitle_disable)
+    if (!video_disable && !subtitle_disable)//利用av_find_best_stream选择流
         st_index[AVMEDIA_TYPE_SUBTITLE] =
             av_find_best_stream(ic, AVMEDIA_TYPE_SUBTITLE,
                                 st_index[AVMEDIA_TYPE_SUBTITLE],
@@ -3128,7 +3128,7 @@ static int read_thread(void *arg)
             is->queue_attachments_req = 0;
         }
 
-        /*  // 如果队列已满，不需要再继续读了if the queue are full, no need to read more */
+        /* 控制缓冲区大小,如果队列已满，不需要再继续读了if the queue are full, no need to read more */
         if (infinite_buffer<1 &&
               (is->audioq.size + is->videoq.size + is->subtitleq.size > MAX_QUEUE_SIZE
             || (stream_has_enough_packets(is->audio_st, is->audio_stream, &is->audioq) &&
@@ -3176,7 +3176,19 @@ static int read_thread(void *arg)
         /* // 计算pkt的pts是否处于播放范围内 check if packet is in play range specified by user, then queue, otherwise discard */
         stream_start_time = ic->streams[pkt->stream_index]->start_time;
         pkt_ts = pkt->pts == AV_NOPTS_VALUE ? pkt->dts : pkt->pts;
-		 // 播放范围内
+		 /**
+		 *播放范围内
+        if (duration == AV_NOPTS_VALUE) //如果当前流无法计算总时长，按无限时长处理
+        	return 1;
+        //计算pkt相对stream位置
+    	int64_t stream_ts = get_pkt_ts(pkt) - get_stream_start_time(ic, pkt->stream_index);
+    	double stream_ts_s = ts_as_second(stream_ts, ic, pkt->stream_index);
+    	//计算pkt相对ic位置
+    	double ic_ts = stream_ts_s - get_ic_start_time(ic);
+    	//是否在时间范围内
+    	return ic_ts <= ((double)duration / 1000000);
+		 *
+		 **/
         pkt_in_play_range = duration == AV_NOPTS_VALUE ||
                 (pkt_ts - (stream_start_time != AV_NOPTS_VALUE ? stream_start_time : 0)) *
                 av_q2d(ic->streams[pkt->stream_index]->time_base) -

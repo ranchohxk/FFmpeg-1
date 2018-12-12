@@ -4173,6 +4173,11 @@ AVProgram *av_find_program_from_stream(AVFormatContext *ic, AVProgram *last, int
     return NULL;
 }
 
+/**
+*enum AVMediaType type,//要选择的流类型
+*int wanted_stream_nb,//目标流索引
+*int related_stream,//参考流索引
+***/
 int av_find_best_stream(AVFormatContext *ic, enum AVMediaType type,
                         int wanted_stream_nb, int related_stream,
                         AVCodec **decoder_ret, int flags)

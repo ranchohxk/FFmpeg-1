@@ -133,6 +133,7 @@ int avpriv_tempfile(const char *prefix, char **filename, int log_offset, void *l
     fd = open(*filename, O_RDWR | O_BINARY | O_CREAT | O_EXCL, 0600);
 #else
     snprintf(*filename, len, "/tmp/%sXXXXXX", prefix);
+	//创建一个临时文件，但是创建的临时文件不能自动删除，需要通过unlink来删除文件
     fd = mkstemp(*filename);
 #if defined(_WIN32) || defined (__ANDROID__)
     if (fd < 0) {
