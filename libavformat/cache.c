@@ -47,7 +47,7 @@
 
 typedef struct CacheEntry {
     int64_t logical_pos;
-    int64_t physical_pos;
+    int64_t physical_pos;//已经缓存文件的实际大小
     int size;
 } CacheEntry;
 
@@ -67,6 +67,7 @@ typedef struct Context {
 
 static int cmp(const void *key, const void *node)
 {
+	//把key转成in64_t指针，再取值；把node的void型指针转换成CacheEntry *，再取logical_pos
     return FFDIFFSIGN(*(const int64_t *)key, ((const CacheEntry *) node)->logical_pos);
 }
 
@@ -77,6 +78,7 @@ static int cache_open(URLContext *h, const char *arg, int flags, AVDictionary **
     //检查cache，去除cache协议
     av_strstart(arg, "cache:", &arg);
 	//获取临时文件的路径和地址，如/tmp/ffcacheaexsEB
+	//目前没找到临时文件在哪里生成？？？？？
     c->fd = avpriv_tempfile("ffcache", &buffername, 0, h);
 	
     if (c->fd < 0) {
@@ -101,22 +103,22 @@ static int add_entry(URLContext *h, const unsigned char *buf, int size)
     struct AVTreeNode *node = NULL;
 
     //FIXME avoid lseek
-    pos = lseek(c->fd, 0, SEEK_END);
-    if (pos < 0) {
+    pos = lseek(c->fd, 0, SEEK_END);//直接取fd文件结尾的位置，也就是存在的文件的位置
+    if (pos < 0) {//如果pos小于0.直接失败
         ret = AVERROR(errno);
         av_log(h, AV_LOG_ERROR, "seek in cache failed\n");
         goto fail;
     }
 	//缓存文件的位置
     c->cache_pos = pos;
-    //把buf写入到fd中
+    //把读取到的buf写入到fd中
     ret = write(c->fd, buf, size);
     if (ret < 0) {
         ret = AVERROR(errno);
         av_log(h, AV_LOG_ERROR, "write in cache failed\n");
         goto fail;
     }
-	//缓存位置加上写入到缓存文件的长度
+	//缓存位置加上写入到缓存文件的长度，也就是缓存位置不断增加
     c->cache_pos += ret;
 
     entry = av_tree_find(c->root, &c->logical_pos, cmp, (void**)next);
@@ -139,7 +141,7 @@ static int add_entry(URLContext *h, const unsigned char *buf, int size)
         entry->logical_pos = c->logical_pos;//逻辑地址
         entry->physical_pos = pos;//物理地址
         entry->size = ret;
-
+		//entry加入到树节点中
         entry_ret = av_tree_insert(&c->root, entry, cmp, &node);
         if (entry_ret && entry_ret != entry) {//如果返回值不等于插入值，返回失败
             ret = -1;
@@ -169,7 +171,9 @@ static int cache_read(URLContext *h, unsigned char *buf, int size)
         entry = next[0];
 	//如果获取到entry
     if (entry) {
+		av_log(NULL,AV_LOG_ERROR,"c->logical_pos:%ld,entry->logical_pos:%ld!\n",c->logical_pos,entry->logical_pos);
         int64_t in_block_pos = c->logical_pos - entry->logical_pos;
+		av_log(NULL,AV_LOG_ERROR,"in_block_pos:%ld!\n",in_block_pos);
         av_assert0(entry->logical_pos <= c->logical_pos);
         if (in_block_pos < entry->size) {
             int64_t physical_target = entry->physical_pos + in_block_pos;
@@ -212,11 +216,11 @@ static int cache_read(URLContext *h, unsigned char *buf, int size)
     }
     if (r<=0)
         return r;
+	av_log(NULL,AV_LOG_ERROR,"c->inner_pos:%ld\n",c->inner_pos);
     c->inner_pos += r;
-
     c->cache_miss ++;
-
     add_entry(h, buf, r);
+	av_log(NULL,AV_LOG_ERROR,"c->logical_pos:%ld\n",c->logical_pos);
     c->logical_pos += r;
     c->end = FFMAX(c->end, c->logical_pos);
 

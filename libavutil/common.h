@@ -81,6 +81,7 @@
 #define FFNABS(a) ((a) <= 0 ? (a) : (-(a)))
 
 /**
+ * 两个数值表达式x和y,如果x > y返回1,如果x < y返回-1,如果x = = y返回0。
  * Comparator.
  * For two numerical expressions x and y, gives 1 if x > y, -1 if x < y, and 0
  * if x == y. This is useful for instance in a qsort comparator callback.

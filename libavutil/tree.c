@@ -31,6 +31,7 @@ typedef struct AVTreeNode {
 
 const int av_tree_node_size = sizeof(AVTreeNode);
 
+//申请节点内存空间
 struct AVTreeNode *av_tree_node_alloc(void)
 {
     return av_mallocz(sizeof(struct AVTreeNode));
@@ -42,11 +43,11 @@ void *av_tree_find(const AVTreeNode *t, void *key,
     if (t) {
         unsigned int v = cmp(key, t->elem);
         if (v) {
-            if (next)
-                next[v >> 31] = t->elem;
+            if (next)//1 >> 31 = 0;
+                next[v >> 31] = t->elem;//1 >> 31 ^ 1 = 1;
             return av_tree_find(t->child[(v >> 31) ^ 1], key, cmp, next);
         } else {
-            if (next) {
+            if (next) {//前序遍历二叉树，先遍历所有左子树，再遍历所有右子树
                 av_tree_find(t->child[0], key, cmp, next);
                 av_tree_find(t->child[1], key, cmp, next);
             }
@@ -143,6 +144,9 @@ void *av_tree_insert(AVTreeNode **tp, void *key,
     }
 }
 
+/**
+*释放树，释放内存
+**/
 void av_tree_destroy(AVTreeNode *t)
 {
     if (t) {
