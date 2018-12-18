@@ -2839,7 +2839,7 @@ out:
 static int decode_interrupt_cb(void *ctx)
 {
     VideoState *is = ctx;
-    return is->abort_request;
+    return is->abort_request;//·µ»ØÖÐÖ¹×´Ì¬
 }
 
 static int stream_has_enough_packets(AVStream *st, int stream_id, PacketQueue *queue) {

@@ -42,7 +42,7 @@ void *av_tree_find(const AVTreeNode *t, void *key,
 {
     if (t) {
         unsigned int v = cmp(key, t->elem);
-        if (v) {
+        if (v) {//如果key，也就是c->logical_pos大于节点的logical_pos
             if (next)//1 >> 31 = 0;
                 next[v >> 31] = t->elem;//1 >> 31 ^ 1 = 1;
             return av_tree_find(t->child[(v >> 31) ^ 1], key, cmp, next);

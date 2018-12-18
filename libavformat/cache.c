@@ -68,6 +68,7 @@ typedef struct Context {
 static int cmp(const void *key, const void *node)
 {
 	//把key转成in64_t指针，再取值；把node的void型指针转换成CacheEntry *，再取logical_pos
+	//如果key大于node->logical_pos，返回1；如果小于，返回-1
     return FFDIFFSIGN(*(const int64_t *)key, ((const CacheEntry *) node)->logical_pos);
 }
 
@@ -80,13 +81,20 @@ static int cache_open(URLContext *h, const char *arg, int flags, AVDictionary **
 	//获取临时文件的路径和地址，如/tmp/ffcacheaexsEB
 	//目前没找到临时文件在哪里生成？？？？？
     c->fd = avpriv_tempfile("ffcache", &buffername, 0, h);
-	
+	av_log(NULL, AV_LOG_ERROR, "buffername:%s\n",buffername);
     if (c->fd < 0) {
         av_log(h, AV_LOG_ERROR, "Failed to create tempfile\n");
         return c->fd;
     }
-
-    unlink(buffername);
+	/**
+	*执行unlink()函数并不一定会真正的删除文件，它先会检查文件系统中此文件的连接数是否为1，
+	*如果不是1说明此文件还有其他链接对象，因此只对此文件的连接数进行减1操作。
+	*若连接数为1，并且在此时没有任何进程打开该文件，此内容才会真正地被删除掉。
+	*在有进程打开此文件的情况下，则暂时不会删除，直到所有打开该文件的进程都结束时文件就会被删除。
+	**/
+	//这里注释掉unlink的话，生成的文件在/tmp目录下，进程结束后，也可以保留文件
+	
+    //unlink(buffername);
     av_freep(&buffername);
 
     return ffurl_open_whitelist(&c->inner, arg, flags, &h->interrupt_callback,
@@ -173,7 +181,6 @@ static int cache_read(URLContext *h, unsigned char *buf, int size)
     if (entry) {
 		av_log(NULL,AV_LOG_ERROR,"c->logical_pos:%ld,entry->logical_pos:%ld!\n",c->logical_pos,entry->logical_pos);
         int64_t in_block_pos = c->logical_pos - entry->logical_pos;
-		av_log(NULL,AV_LOG_ERROR,"in_block_pos:%ld!\n",in_block_pos);
         av_assert0(entry->logical_pos <= c->logical_pos);
         if (in_block_pos < entry->size) {
             int64_t physical_target = entry->physical_pos + in_block_pos;
@@ -209,18 +216,15 @@ static int cache_read(URLContext *h, unsigned char *buf, int size)
     }
 
     r = ffurl_read(c->inner, buf, size);
-	av_log(NULL,AV_LOG_ERROR,"r:%ld,size:%d\n",r,size);
-    if (r == 0 && size>0) {
+    if (r == 0 && size > 0) {
         c->is_true_eof = 1;
         av_assert0(c->end >= c->logical_pos);
     }
-    if (r<=0)
+    if (r <= 0)
         return r;
-	av_log(NULL,AV_LOG_ERROR,"c->inner_pos:%ld\n",c->inner_pos);
     c->inner_pos += r;
     c->cache_miss ++;
     add_entry(h, buf, r);
-	av_log(NULL,AV_LOG_ERROR,"c->logical_pos:%ld\n",c->logical_pos);
     c->logical_pos += r;
     c->end = FFMAX(c->end, c->logical_pos);
 

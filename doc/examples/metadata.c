@@ -49,7 +49,7 @@ int main (int argc, char **argv)
 	//传第二个参数的文件名
     if ((ret = avformat_open_input(&fmt_ctx, argv[1], NULL, NULL)))
         return ret;
-
+	//打印出metadata的信息
     while ((tag = av_dict_get(fmt_ctx->metadata, "", tag, AV_DICT_IGNORE_SUFFIX)))
         printf("%s=%s\n", tag->key, tag->value);
 
