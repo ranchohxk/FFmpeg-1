@@ -1523,7 +1523,6 @@ static int read_frame_internal(AVFormatContext *s, AVPacket *pkt)
 {
     int ret = 0, i, got_packet = 0;
     AVDictionary *metadata = NULL;
-
     av_init_packet(pkt);
 
     while (!got_packet && !s->internal->parse_queue) {
@@ -1723,15 +1722,23 @@ FF_ENABLE_DEPRECATION_WARNINGS
 
     return ret;
 }
-
+/**
+*av_read_frame 读出的视频是完整的一帧，音频可能是几帧
+*/
 int av_read_frame(AVFormatContext *s, AVPacket *pkt)
 {
+	
     const int genpts = s->flags & AVFMT_FLAG_GENPTS;
+	
     int eof = 0;
     int ret;
     AVStream *st;
 
     if (!genpts) {
+		/**
+		*一般情况下会调用read_frame_internal(s, pkt)
+    	* 直接返回
+		**/
         ret = s->internal->packet_buffer
               ? read_from_packet_buffer(&s->internal->packet_buffer,
                                         &s->internal->packet_buffer_end, pkt)

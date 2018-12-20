@@ -1708,7 +1708,7 @@ typedef struct AVPacket {
     int64_t convergence_duration;
 #endif
 } AVPacket;
-#define AV_PKT_FLAG_KEY     0x0001 ///< The packet contains a keyframe
+#define AV_PKT_FLAG_KEY     0x0001 ///< ¹Ø¼üÖ¡The packet contains a keyframe
 #define AV_PKT_FLAG_CORRUPT 0x0002 ///< The packet content is corrupted
 /**
  * Flag is used to discard packets which are required to maintain valid

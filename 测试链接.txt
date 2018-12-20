@@ -10,3 +10,10 @@ http://live.hkstv.hk.lxdns.com/live/hks/playlist.m3u8
 
 
 http://videocdn.eebbk.net/a603abd8497654683b9975ad96456b62.avi
+
+http://search-characterword-dn.eebbk.net/search-characterword/2018/09/25/144812014_2b4bb5596b8d14c2.mp4
+
+./ffmpeg -i test.mp4 -vf "drawtext=fontsize=100:fontfile=FreeSerif.ttf:text='hello world':x=20:y=20" output.mp4
+
+╩фох©Э
+

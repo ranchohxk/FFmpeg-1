@@ -1360,6 +1360,7 @@ typedef struct AVFormatContext {
     struct AVOutputFormat *oformat;
 
     /**
+     * 指向具体的格式对应的Context，如：MovContext
      * Format private data. This is an AVOptions-enabled struct
      * if and only if iformat/oformat.priv_class is not NULL.
      *

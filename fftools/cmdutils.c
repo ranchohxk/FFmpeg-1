@@ -131,7 +131,7 @@ void register_exit(void (*cb)(int ret))
 {
     program_exit = cb;
 }
-
+//退出和清理
 void exit_program(int ret)
 {
     if (program_exit)

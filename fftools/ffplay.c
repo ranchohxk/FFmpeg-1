@@ -3947,7 +3947,6 @@ int main(int argc, char **argv)
         av_log(NULL, AV_LOG_FATAL, "Could not initialize lock manager!\n");
         do_exit(NULL);
     }
-
 	// 初始化裸数据包
     av_init_packet(&flush_pkt);
     flush_pkt.data = (uint8_t *)&flush_pkt;

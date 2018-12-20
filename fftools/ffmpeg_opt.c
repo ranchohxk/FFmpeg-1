@@ -961,7 +961,7 @@ static void dump_attachment(AVStream *st, const char *filename)
     avio_flush(out);
     avio_close(out);
 }
-
+/**处理输入文件*/
 static int open_input_file(OptionsContext *o, const char *filename)
 {
     InputFile *f;
@@ -2087,7 +2087,7 @@ static int init_complex_filters(void)
     }
     return 0;
 }
-
+/*处理输出文件*/
 static int open_output_file(OptionsContext *o, const char *filename)
 {
     AVFormatContext *oc;
@@ -3287,7 +3287,9 @@ static int open_files(OptionGroupList *l, const char *inout,
 
     return 0;
 }
-
+/**
+*解析ffmpeg的命令行options
+**/
 int ffmpeg_parse_options(int argc, char **argv)
 {
     OptionParseContext octx;
@@ -3314,7 +3316,7 @@ int ffmpeg_parse_options(int argc, char **argv)
     /* configure terminal and setup signal handlers */
     term_init();
 
-    /* open input files */
+    /* 调用open_input_file打开输入文件open input files */
     ret = open_files(&octx.groups[GROUP_INFILE], "input", open_input_file);
     if (ret < 0) {
         av_log(NULL, AV_LOG_FATAL, "Error opening input files: ");
@@ -3328,7 +3330,7 @@ int ffmpeg_parse_options(int argc, char **argv)
         goto fail;
     }
 
-    /* open output files */
+    /* 调用open_output_file打开输出文件open output files */
     ret = open_files(&octx.groups[GROUP_OUTFILE], "output", open_output_file);
     if (ret < 0) {
         av_log(NULL, AV_LOG_FATAL, "Error opening output files: ");
@@ -3362,7 +3364,7 @@ static int opt_progress(void *optctx, const char *opt, const char *arg)
     progress_avio = avio;
     return 0;
 }
-
+//options数组
 #define OFFSET(x) offsetof(OptionsContext, x)
 const OptionDef options[] = {
     /* main options */
@@ -3651,6 +3653,7 @@ const OptionDef options[] = {
     { "ar",             OPT_AUDIO | HAS_ARG  | OPT_INT | OPT_SPEC |
                         OPT_INPUT | OPT_OUTPUT,                                    { .off = OFFSET(audio_sample_rate) },
         "set audio sampling rate (in Hz)", "rate" },
+        //音频通道
     { "ac",             OPT_AUDIO | HAS_ARG  | OPT_INT | OPT_SPEC |
                         OPT_INPUT | OPT_OUTPUT,                                    { .off = OFFSET(audio_channels) },
         "set number of audio channels", "channels" },

@@ -3634,7 +3634,7 @@ static void report_new_stream(int input_index, AVPacket *pkt)
            pkt->pos, av_ts2timestr(pkt->dts, &st->time_base));
     file->nb_streams_warn = pkt->stream_index + 1;
 }
-
+//转码的初始化工作
 static int transcode_init(void)
 {
     int ret = 0, i, j, k;
@@ -3666,7 +3666,7 @@ static int transcode_init(void)
                 input_streams[j + ifile->ist_index]->start = av_gettime_relative();
     }
 
-    /* init input streams */
+    /* 其中调用了avcodec_open2()打开编码器,init input streams */
     for (i = 0; i < nb_input_streams; i++)
         if ((ret = init_input_stream(i, error, sizeof(error))) < 0) {
             for (i = 0; i < nb_output_streams; i++) {
@@ -4226,6 +4226,7 @@ static int process_input(int file_index)
     int64_t pkt_dts;
 
     is  = ifile->ctx;
+	//获取一帧压缩编码数据，即一个AVPacket。其中调用了av_read_frame()
     ret = get_input_packet(ifile, &pkt);
 
     if (ret == AVERROR(EAGAIN)) {
@@ -4570,7 +4571,7 @@ static int transcode_step(void)
         av_assert0(ost->source_index >= 0);
         ist = input_streams[ost->source_index];
     }
-
+	//完成解码工作
     ret = process_input(ist->file_index);
     if (ret == AVERROR(EAGAIN)) {
         if (input_files[ist->file_index]->eagain)
@@ -4580,7 +4581,7 @@ static int transcode_step(void)
 
     if (ret < 0)
         return ret == AVERROR_EOF ? 0 : ret;
-
+    //完成编码工作
     return reap_filters(0);
 }
 
@@ -4595,7 +4596,7 @@ static int transcode(void)
     InputStream *ist;
     int64_t timer_start;
     int64_t total_packets_written = 0;
-
+	//转码的初始化工作
     ret = transcode_init();
     if (ret < 0)
         goto fail;
@@ -4614,7 +4615,7 @@ static int transcode(void)
     while (!received_sigterm) {
         int64_t cur_time= av_gettime_relative();
 
-        /* if 'q' pressed, exits */
+        /* 检测键盘操作。例如转码的过程中按下“Q”键之后，会退出转码if 'q' pressed, exits */
         if (stdin_interaction)
             if (check_keyboard_interaction(cur_time) < 0)
                 break;
@@ -4624,7 +4625,7 @@ static int transcode(void)
             av_log(NULL, AV_LOG_VERBOSE, "No more output streams to write to, finishing.\n");
             break;
         }
-
+		//进行转码
         ret = transcode_step();
         if (ret < 0 && ret != AVERROR_EOF) {
             char errbuf[128];
@@ -4634,7 +4635,7 @@ static int transcode(void)
             break;
         }
 
-        /* dump report by using the output first video and audio streams */
+        /* 打印转码信息，输出到屏幕上dump report by using the output first video and audio streams */
         print_report(0, timer_start, cur_time);
     }
 #if HAVE_PTHREADS
@@ -4648,6 +4649,7 @@ static int transcode(void)
             process_input_packet(ist, NULL, 0);
         }
     }
+	//输出编码器中剩余的帧
     flush_encoders();
 
     term_exit();
@@ -4792,7 +4794,7 @@ int main(int argc, char **argv)
         argc--;
         argv++;
     }
-
+	//注册所有编码器和解码器
     avcodec_register_all();
 #if CONFIG_AVDEVICE
     avdevice_register_all();
@@ -4800,14 +4802,16 @@ int main(int argc, char **argv)
     avfilter_register_all();
     av_register_all();
     avformat_network_init();
-
+	//打印输出FFmpeg版本信息（编译时间，编译选项，类库信息等）
     show_banner(argc, argv, options);
-
-    /* parse options and open all input/output files */
+    /*解析输入命令行parse options and open all input/output files */
+	/*
+	*1.ffmpeg的很多解析参数在ffmpeg_opt.c文件中
+	**/
     ret = ffmpeg_parse_options(argc, argv);
     if (ret < 0)
         exit_program(1);
-
+	//如果输入和输出文件都小于0，退出
     if (nb_output_files <= 0 && nb_input_files == 0) {
         show_usage();
         av_log(NULL, AV_LOG_WARNING, "Use -h to get full help or, even better, run 'man %s'\n", program_name);
@@ -4817,6 +4821,7 @@ int main(int argc, char **argv)
     /* file converter / grab */
     if (nb_output_files <= 0) {
         av_log(NULL, AV_LOG_FATAL, "At least one output file must be specified\n");
+		//退出和清理
         exit_program(1);
     }
 
@@ -4829,10 +4834,11 @@ int main(int argc, char **argv)
         if (strcmp(output_files[i]->ctx->oformat->name, "rtp"))
             want_sdp = 0;
     }
-
+	//获取当前开始时间
     current_time = ti = getutime();
+	//转码
     if (transcode() < 0)
-        exit_program(1);
+        exit_program(1);//转码失败退出
     ti = getutime() - ti;
     if (do_benchmark) {
         av_log(NULL, AV_LOG_INFO, "bench: utime=%0.3fs\n", ti / 1000000.0);
