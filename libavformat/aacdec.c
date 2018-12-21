@@ -133,7 +133,7 @@ static uint32_t get_sample_rate(const uint8_t sf_index)
 //add end
 static int adts_aac_read_header(AVFormatContext *s)
 {
-	av_log(NULL, AV_LOG_WARNING, "hxk->adts_aac_read_header!\n");
+	//av_log(NULL, AV_LOG_WARNING, "hxk->adts_aac_read_header!\n");
 
     AVStream *st;
     uint16_t state;
@@ -217,7 +217,7 @@ static int adts_aac_read_header(AVFormatContext *s)
 			}
 			mFrameDurationUs = (1024 * 1000000ll + (sr - 1)) / sr;
 			duration = numFrames * mFrameDurationUs;//us
-			av_log(NULL, AV_LOG_WARNING, "hxk->duration.us:%d!\n",duration);
+			//av_log(NULL, AV_LOG_WARNING, "hxk->duration.us:%d!\n",duration);
 			//时间基转换avstream的，us单位(AV_TIME_BASE_Q)转avstream的时间基
 			duration = av_rescale_q(duration,AV_TIME_BASE_Q, st->time_base);
 			st->duration = duration;

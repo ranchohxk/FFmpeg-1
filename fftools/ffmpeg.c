@@ -4804,9 +4804,9 @@ int main(int argc, char **argv)
     avformat_network_init();
 	//打印输出FFmpeg版本信息（编译时间，编译选项，类库信息等）
     show_banner(argc, argv, options);
-    /*解析输入命令行parse options and open all input/output files */
-	/*
-	*1.ffmpeg的很多解析参数在ffmpeg_opt.c文件中
+    /*解析输入命令行
+    *parse options and open all input/output files 
+	*ffmpeg的很多解析参数在ffmpeg_opt.c文件中
 	**/
     ret = ffmpeg_parse_options(argc, argv);
     if (ret < 0)

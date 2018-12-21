@@ -1107,6 +1107,9 @@ static void print_all_libs_info(int flags, int level)
     PRINT_LIB_INFO(postproc,   POSTPROC,   flags, level);
 }
 
+/**
+*打印程序相关信息，如ffmpeg的版本号,configuration的情况.
+**/
 static void print_program_info(int flags, int level)
 {
     const char *indent = flags & INDENT? "  " : "";
@@ -1152,8 +1155,9 @@ void show_banner(int argc, char **argv, const OptionDef *options)
     int idx = locate_option(argc, argv, options, "version");
     if (hide_banner || idx)
         return;
-
+	//打印程序信息
     print_program_info (INDENT|SHOW_COPYRIGHT, AV_LOG_INFO);
+	//打印lib信息
     print_all_libs_info(INDENT|SHOW_CONFIG,  AV_LOG_INFO);
     print_all_libs_info(INDENT|SHOW_VERSION, AV_LOG_INFO);
 }

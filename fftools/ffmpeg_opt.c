@@ -1071,7 +1071,7 @@ static int open_input_file(OptionsContext *o, const char *filename)
 
     /* apply forced codec ids */
     for (i = 0; i < ic->nb_streams; i++)
-        choose_decoder(o, ic, ic->streams[i]);
+        choose_decoder(o, ic, ic->streams[i]);//选择解码器
 
     if (find_stream_info) {
         AVDictionary **opts = setup_find_stream_info_opts(ic, o->g->codec_opts);
@@ -1079,12 +1079,13 @@ static int open_input_file(OptionsContext *o, const char *filename)
 
         /* If not enough info to get the stream parameters, we decode the
            first frames to get it. (used in mpeg case for example) */
+        //获取媒体信息
         ret = avformat_find_stream_info(ic, opts);
 
         for (i = 0; i < orig_nb_streams; i++)
             av_dict_free(&opts[i]);
         av_freep(&opts);
-
+		//没找到解码器，关闭
         if (ret < 0) {
             av_log(NULL, AV_LOG_FATAL, "%s: could not find codec parameters\n", filename);
             if (ic->nb_streams == 0) {
@@ -1130,7 +1131,7 @@ static int open_input_file(OptionsContext *o, const char *filename)
     /* update the current parameters so that they match the one of the input stream */
     add_input_streams(o, ic);
 
-    /* dump the file content */
+    /* 打印文件信息dump the file content */
     av_dump_format(ic, nb_input_files, filename, 0);
 
     GROW_ARRAY(input_files, nb_input_files);
@@ -3369,10 +3370,12 @@ static int opt_progress(void *optctx, const char *opt, const char *arg)
 const OptionDef options[] = {
     /* main options */
     CMDUTILS_COMMON_OPTIONS
-    { "f",              HAS_ARG | OPT_STRING | OPT_OFFSET |
+	//指定格式（音频或者视频格式）
+	{ "f",              HAS_ARG | OPT_STRING | OPT_OFFSET |
                         OPT_INPUT | OPT_OUTPUT,                      { .off       = OFFSET(format) },
         "force format", "fmt" },
-    { "y",              OPT_BOOL,                                    {              &file_overwrite },
+	//覆盖已有文件
+	{ "y",              OPT_BOOL,                                    {              &file_overwrite },
         "overwrite output files" },
     { "n",              OPT_BOOL,                                    {              &no_file_overwrite },
         "never overwrite output files" },
@@ -3501,7 +3504,8 @@ const OptionDef options[] = {
     { "qscale",         HAS_ARG | OPT_EXPERT | OPT_PERFILE |
                         OPT_OUTPUT,                                  { .func_arg = opt_qscale },
         "use fixed quality scale (VBR)", "q" },
-    { "profile",        HAS_ARG | OPT_EXPERT | OPT_PERFILE | OPT_OUTPUT, { .func_arg = opt_profile },
+	//指定profile
+	{ "profile",        HAS_ARG | OPT_EXPERT | OPT_PERFILE | OPT_OUTPUT, { .func_arg = opt_profile },
         "set profile", "profile" },
     { "filter",         HAS_ARG | OPT_STRING | OPT_SPEC | OPT_OUTPUT, { .off = OFFSET(filters) },
         "set stream filtergraph", "filter_graph" },
@@ -3548,13 +3552,16 @@ const OptionDef options[] = {
     /* video options */
     { "vframes",      OPT_VIDEO | HAS_ARG  | OPT_PERFILE | OPT_OUTPUT,           { .func_arg = opt_video_frames },
         "set the number of video frames to output", "number" },
-    { "r",            OPT_VIDEO | HAS_ARG  | OPT_STRING | OPT_SPEC |
+	//帧速率（fps）
+	{ "r",            OPT_VIDEO | HAS_ARG  | OPT_STRING | OPT_SPEC |
                       OPT_INPUT | OPT_OUTPUT,                                    { .off = OFFSET(frame_rates) },
         "set frame rate (Hz value, fraction or abbreviation)", "rate" },
-    { "s",            OPT_VIDEO | HAS_ARG | OPT_SUBTITLE | OPT_STRING | OPT_SPEC |
+	//指定分辨率（320×240）
+	{ "s",            OPT_VIDEO | HAS_ARG | OPT_SUBTITLE | OPT_STRING | OPT_SPEC |
                       OPT_INPUT | OPT_OUTPUT,                                    { .off = OFFSET(frame_sizes) },
         "set frame size (WxH or abbreviation)", "size" },
-    { "aspect",       OPT_VIDEO | HAS_ARG  | OPT_STRING | OPT_SPEC |
+	//设置视频长宽比（4:3，16:9 或 1.3333，1.7777）
+	{ "aspect",       OPT_VIDEO | HAS_ARG  | OPT_STRING | OPT_SPEC |
                       OPT_OUTPUT,                                                { .off = OFFSET(frame_aspect_ratios) },
         "set aspect ratio (4:3, 16:9 or 1.3333, 1.7777)", "aspect" },
     { "pix_fmt",      OPT_VIDEO | HAS_ARG | OPT_EXPERT  | OPT_STRING | OPT_SPEC |
@@ -3593,7 +3600,8 @@ const OptionDef options[] = {
         "dump video coding statistics to file", "file" },
     { "vstats_version",  OPT_VIDEO | OPT_INT | HAS_ARG | OPT_EXPERT ,            { &vstats_version },
         "Version of the vstats format to use."},
-    { "vf",           OPT_VIDEO | HAS_ARG  | OPT_PERFILE | OPT_OUTPUT,           { .func_arg = opt_video_filters },
+	//设置视频频filter，如/ffmpeg -i test.mp4 -vf "drawtext=fontsize=100:fontfile=smile.ttf:text='hello world':x=20:y=20" output.mp4 视频加文字水印
+	{ "vf",           OPT_VIDEO | HAS_ARG  | OPT_PERFILE | OPT_OUTPUT,           { .func_arg = opt_video_filters },
         "set video filters", "filter_graph" },
     { "intra_matrix", OPT_VIDEO | HAS_ARG | OPT_EXPERT  | OPT_STRING | OPT_SPEC |
                       OPT_OUTPUT,                                                { .off = OFFSET(intra_matrices) },
@@ -3621,9 +3629,11 @@ const OptionDef options[] = {
     { "force_key_frames", OPT_VIDEO | OPT_STRING | HAS_ARG | OPT_EXPERT |
                           OPT_SPEC | OPT_OUTPUT,                                 { .off = OFFSET(forced_key_frames) },
         "force key frames at specified timestamps", "timestamps" },
-    { "ab",           OPT_VIDEO | HAS_ARG | OPT_PERFILE | OPT_OUTPUT,            { .func_arg = opt_bitrate },
+	//设置比特率（单位为 bit/s，老版的单位可能是 Kbit/s），对于 MP3 格式，若要听到较高品质的声音则建议设置为 160Kbit/s（单声道则设置为 80Kbit/s）以上。
+	{ "ab",           OPT_VIDEO | HAS_ARG | OPT_PERFILE | OPT_OUTPUT,            { .func_arg = opt_bitrate },
         "audio bitrate (please use -b:a)", "bitrate" },
-    { "b",            OPT_VIDEO | HAS_ARG | OPT_PERFILE | OPT_OUTPUT,            { .func_arg = opt_bitrate },
+	//设置视频比特率
+	{ "b",            OPT_VIDEO | HAS_ARG | OPT_PERFILE | OPT_OUTPUT,            { .func_arg = opt_bitrate },
         "video bitrate (please use -b:v)", "bitrate" },
     { "hwaccel",          OPT_VIDEO | OPT_STRING | HAS_ARG | OPT_EXPERT |
                           OPT_SPEC | OPT_INPUT,                                  { .off = OFFSET(hwaccels) },
@@ -3648,16 +3658,20 @@ const OptionDef options[] = {
     /* audio options */
     { "aframes",        OPT_AUDIO | HAS_ARG  | OPT_PERFILE | OPT_OUTPUT,           { .func_arg = opt_audio_frames },
         "set the number of audio frames to output", "number" },
-    { "aq",             OPT_AUDIO | HAS_ARG  | OPT_PERFILE | OPT_OUTPUT,           { .func_arg = opt_audio_qscale },
+	//设置音频质量（指定编码）
+	{ "aq",             OPT_AUDIO | HAS_ARG  | OPT_PERFILE | OPT_OUTPUT,           { .func_arg = opt_audio_qscale },
         "set audio quality (codec-specific)", "quality", },
-    { "ar",             OPT_AUDIO | HAS_ARG  | OPT_INT | OPT_SPEC |
+	//设置音频采样率
+	{ "ar",             OPT_AUDIO | HAS_ARG  | OPT_INT | OPT_SPEC |
                         OPT_INPUT | OPT_OUTPUT,                                    { .off = OFFSET(audio_sample_rate) },
         "set audio sampling rate (in Hz)", "rate" },
-        //音频通道
+     //音频通道，设置声道数，1 就是单声道，2 就是立体声
     { "ac",             OPT_AUDIO | HAS_ARG  | OPT_INT | OPT_SPEC |
                         OPT_INPUT | OPT_OUTPUT,                                    { .off = OFFSET(audio_channels) },
         "set number of audio channels", "channels" },
-    { "an",             OPT_AUDIO | OPT_BOOL | OPT_OFFSET | OPT_INPUT | OPT_OUTPUT,{ .off = OFFSET(audio_disable) },
+
+	//取消音频轨
+	{ "an",             OPT_AUDIO | OPT_BOOL | OPT_OFFSET | OPT_INPUT | OPT_OUTPUT,{ .off = OFFSET(audio_disable) },
         "disable audio" },
     { "acodec",         OPT_AUDIO | HAS_ARG  | OPT_PERFILE |
                         OPT_INPUT | OPT_OUTPUT,                                    { .func_arg = opt_audio_codec },
@@ -3665,7 +3679,8 @@ const OptionDef options[] = {
     { "atag",           OPT_AUDIO | HAS_ARG  | OPT_EXPERT | OPT_PERFILE |
                         OPT_OUTPUT,                                                { .func_arg = opt_old2new },
         "force audio tag/fourcc", "fourcc/tag" },
-    { "vol",            OPT_AUDIO | HAS_ARG  | OPT_INT,                            { &audio_volume },
+	//设置录制音量大小（默认为 256）< 百分比 >
+	{ "vol",            OPT_AUDIO | HAS_ARG  | OPT_INT,                            { &audio_volume },
         "change audio volume (256=normal)" , "volume" },
     { "sample_fmt",     OPT_AUDIO | HAS_ARG  | OPT_EXPERT | OPT_SPEC |
                         OPT_STRING | OPT_INPUT | OPT_OUTPUT,                       { .off = OFFSET(sample_fmts) },
@@ -3673,6 +3688,7 @@ const OptionDef options[] = {
     { "channel_layout", OPT_AUDIO | HAS_ARG  | OPT_EXPERT | OPT_PERFILE |
                         OPT_INPUT | OPT_OUTPUT,                                    { .func_arg = opt_channel_layout },
         "set channel layout", "layout" },
+    //设置音频filter，如.ffmpeg -i input.wav -af ‘ volume=0.5’ output.wav 来调整音量
     { "af",             OPT_AUDIO | HAS_ARG  | OPT_PERFILE | OPT_OUTPUT,           { .func_arg = opt_audio_filters },
         "set audio filters", "filter_graph" },
     { "guess_layout_max", OPT_AUDIO | HAS_ARG | OPT_INT | OPT_SPEC | OPT_EXPERT | OPT_INPUT, { .off = OFFSET(guess_layout_max) },
