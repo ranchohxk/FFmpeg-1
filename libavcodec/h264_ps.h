@@ -40,6 +40,7 @@
 
 /**
  * Sequence parameter set
+ * sps 结构体
  */
 typedef struct SPS {
     unsigned int sps_id;
@@ -105,6 +106,7 @@ typedef struct SPS {
 
 /**
  * Picture parameter set
+ * pps 结构体
  */
 typedef struct PPS {
     unsigned int sps_id;

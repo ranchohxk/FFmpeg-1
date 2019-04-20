@@ -343,6 +343,7 @@ int ff_h264_decode_seq_parameter_set(GetBitContext *gb, AVCodecContext *avctx,
     sps_buf = av_buffer_allocz(sizeof(*sps));
     if (!sps_buf)
         return AVERROR(ENOMEM);
+	//sps结构体指针指向sps_buf->data
     sps = (SPS*)sps_buf->data;
 
     sps->data_size = gb->buffer_end - gb->buffer;
@@ -350,7 +351,14 @@ int ff_h264_decode_seq_parameter_set(GetBitContext *gb, AVCodecContext *avctx,
         av_log(avctx, AV_LOG_WARNING, "Truncating likely oversized SPS\n");
         sps->data_size = sizeof(sps->data);
     }
+	//从gb-buffer中拷贝data_size个数据到sps的data中,sps->data中就是sps的内容
     memcpy(sps->data, gb->buffer, sps->data_size);
+/*	
+	//打印出sps的内容
+	for( int i = 0;i <sizeof(sps->data);i++){
+		av_log(NULL,AV_LOG_ERROR,"sps->data:%x\n",sps->data[i]);
+	}
+*/
 	//profile型，8bit
     //注意get_bits()
     /*
@@ -384,7 +392,7 @@ int ff_h264_decode_seq_parameter_set(GetBitContext *gb, AVCodecContext *avctx,
     //注意：get_ue_golomb()
     //表示当前的序列参数集的id。通过该id值，图像参数集pps可以引用其代表的sps中的参数。
     sps_id    = get_ue_golomb_31(gb);
-
+    //超过最大的sps的数量32报错？？
     if (sps_id >= MAX_SPS_COUNT) {
         av_log(avctx, AV_LOG_ERROR, "sps_id %u out of range\n", sps_id);
         goto fail;
@@ -395,8 +403,8 @@ int ff_h264_decode_seq_parameter_set(GetBitContext *gb, AVCodecContext *avctx,
     sps->profile_idc          = profile_idc;
     sps->constraint_set_flags = constraint_set_flags;
     sps->level_idc            = level_idc;
+	av_log(NULL,AV_LOG_ERROR,"level_idc:%d\n",level_idc);
     sps->full_range           = -1;
-
     memset(sps->scaling_matrix4, 16, sizeof(sps->scaling_matrix4));
     memset(sps->scaling_matrix8, 16, sizeof(sps->scaling_matrix8));
     sps->scaling_matrix_present = 0;

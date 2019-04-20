@@ -143,6 +143,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "Could not allocate video frame\n");
         exit(1);
     }
+	//解码后视频帧参数
     frame->format = c->pix_fmt;
     frame->width  = c->width;
     frame->height = c->height;
