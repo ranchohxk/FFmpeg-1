@@ -49,6 +49,7 @@ extern const uint8_t ff_interleaved_dirac_golomb_vlc_code[256];
 
 /**
  * Read an unsigned Exp-Golomb code in the range 0 to 8190.
+ * 无符号指数哥伦布编码
  */
 static inline int get_ue_golomb(GetBitContext *gb)
 {
@@ -178,6 +179,7 @@ static inline int get_te_golomb(GetBitContext *gb, int range)
 }
 
 /**
+ *有符号指数哥伦布编码
  * read signed exp golomb code.
  */
 static inline int get_se_golomb(GetBitContext *gb)
