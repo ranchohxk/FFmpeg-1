@@ -147,7 +147,9 @@ int ff_openssl_init(void)
 {
     avpriv_lock_avformat();
     if (!openssl_init) {
+		//ssl库初始化
         SSL_library_init();
+		//载入所有的ssl错误消息
         SSL_load_error_strings();
 #if HAVE_THREADS
         if (!CRYPTO_get_locking_callback()) {
@@ -200,8 +202,11 @@ static int print_tls_error(URLContext *h, int ret)
 static int tls_close(URLContext *h)
 {
     TLSContext *c = h->priv_data;
+	//如果有ssl
     if (c->ssl) {
+		//关闭SSL连接
         SSL_shutdown(c->ssl);
+		//释放SSL
         SSL_free(c->ssl);
     }
     if (c->ctx)
@@ -222,7 +227,7 @@ static int tls_open(URLContext *h, const char *uri, int flags, AVDictionary **op
     TLSShared *c = &p->tls_shared;
     BIO *bio;
     int ret;
-
+	//SSL库初始化和错误信息载入
     if ((ret = ff_openssl_init()) < 0)
         return ret;
 
@@ -233,6 +238,7 @@ static int tls_open(URLContext *h, const char *uri, int flags, AVDictionary **op
     // and insecure SSLv2 and SSLv3.  Despite the name, SSLv23_*_method()
     // enables support for all versions of SSL and TLS, and we then disable
     // support for the old protocols immediately after creating the context.
+    //产生一个SSL_CTX
     p->ctx = SSL_CTX_new(c->listen ? SSLv23_server_method() : SSLv23_client_method());
     if (!p->ctx) {
         av_log(h, AV_LOG_ERROR, "%s\n", ERR_error_string(ERR_get_error(), NULL));
@@ -244,12 +250,14 @@ static int tls_open(URLContext *h, const char *uri, int flags, AVDictionary **op
         if (!SSL_CTX_load_verify_locations(p->ctx, c->ca_file, NULL))
             av_log(h, AV_LOG_ERROR, "SSL_CTX_load_verify_locations %s\n", ERR_error_string(ERR_get_error(), NULL));
     }
+	//载入用户的数字证书
     if (c->cert_file && !SSL_CTX_use_certificate_chain_file(p->ctx, c->cert_file)) {
         av_log(h, AV_LOG_ERROR, "Unable to load cert file %s: %s\n",
                c->cert_file, ERR_error_string(ERR_get_error(), NULL));
         ret = AVERROR(EIO);
         goto fail;
     }
+	//载入用户私钥
     if (c->key_file && !SSL_CTX_use_PrivateKey_file(p->ctx, c->key_file, SSL_FILETYPE_PEM)) {
         av_log(h, AV_LOG_ERROR, "Unable to load key file %s: %s\n",
                c->key_file, ERR_error_string(ERR_get_error(), NULL));
@@ -258,8 +266,14 @@ static int tls_open(URLContext *h, const char *uri, int flags, AVDictionary **op
     }
     // Note, this doesn't check that the peer certificate actually matches
     // the requested hostname.
+    /**
+    *SSL_VERIFY_NONE表示不验证
+	*SSL_VERIFY_PEER用于客户端时要求服务器必须提供证书，用于服务器时服务器会发出证书请求消息要求客户端提供证书，但是客户端也可以不提供
+	*SSL_VERIGY_FAIL_IF_NO_PEER_CERT只适用于服务器且必须提供证书。他必须与SSL_VERIFY_PEER一起使用
+    */
     if (c->verify)
         SSL_CTX_set_verify(p->ctx, SSL_VERIFY_PEER|SSL_VERIFY_FAIL_IF_NO_PEER_CERT, NULL);
+	//产生一个新的SSL
     p->ssl = SSL_new(p->ctx);
     if (!p->ssl) {
         av_log(h, AV_LOG_ERROR, "%s\n", ERR_error_string(ERR_get_error(), NULL));
@@ -302,6 +316,7 @@ fail:
 static int tls_read(URLContext *h, uint8_t *buf, int size)
 {
     TLSContext *c = h->priv_data;
+	//接收消息
     int ret = SSL_read(c->ssl, buf, size);
     if (ret > 0)
         return ret;
@@ -313,6 +328,7 @@ static int tls_read(URLContext *h, uint8_t *buf, int size)
 static int tls_write(URLContext *h, const uint8_t *buf, int size)
 {
     TLSContext *c = h->priv_data;
+	//往服务器写数据
     int ret = SSL_write(c->ssl, buf, size);
     if (ret > 0)
         return ret;

@@ -62,7 +62,7 @@
 
 const char program_name[] = "ffplay";
 const int program_birth_year = 2003;
-
+//队列的最大值15mb，也就是加载到15mb的时候就不会加载了
 #define MAX_QUEUE_SIZE (15 * 1024 * 1024)
 #define MIN_FRAMES 25
 #define EXTERNAL_CLOCK_MIN_FRAMES 2
@@ -1030,6 +1030,9 @@ static int upload_texture(SDL_Texture **tex, AVFrame *frame, struct SwsContext *
     return ret;
 }
 
+/**
+*视频帧显示
+**/
 static void video_image_display(VideoState *is)
 {
     Frame *vp;
@@ -1039,7 +1042,7 @@ static void video_image_display(VideoState *is)
     vp = frame_queue_peek_last(&is->pictq);
     if (is->subtitle_st) {
         if (frame_queue_nb_remaining(&is->subpq) > 0) {
-            sp = frame_queue_peek(&is->subpq);
+            sp = frame_queue_peek(&is->subpq);//从视频队列中获取视频帧
 
             if (vp->pts >= sp->pts + ((float) sp->sub.start_display_time / 1000)) {
                 if (!sp->uploaded) {
@@ -1452,8 +1455,9 @@ static double get_clock(Clock *c)
         return NAN;
     if (c->paused) {//如果暂停，直接返回pts值
         return c->pts;
-    } else {
+    } else {// 如果当前正处在播放状态，则返回的时间为最新的pts + 更新pts之后流逝的时间
         double time = av_gettime_relative() / 1000000.0;
+		 //这里返回的时间实际为 c->pts + time - c->last_updated
         return c->pts_drift + time - (time - c->last_updated) * (1.0 - c->speed);
     }
 }
@@ -1468,7 +1472,7 @@ static void set_clock_at(Clock *c, double pts, int serial, double time)
 
 static void set_clock(Clock *c, double pts, int serial)
 {
-    double time = av_gettime_relative() / 1000000.0;
+    double time = av_gettime_relative() / 1000000.0;//av_gettime_relative()的单位是毫秒
     set_clock_at(c, pts, serial, time);
 }
 /*
@@ -1498,7 +1502,9 @@ static void sync_clock_to_slave(Clock *c, Clock *slave)
     if (!isnan(slave_clock) && (isnan(clock) || fabs(clock - slave_clock) > AV_NOSYNC_THRESHOLD))
         set_clock(c, slave_clock, slave->serial);
 }
-
+/**
+*获取主时钟类型，是视频流作为主时钟还是音频流
+**/
 static int get_master_sync_type(VideoState *is) {
     if (is->av_sync_type == AV_SYNC_VIDEO_MASTER) {
         if (is->video_st)
@@ -1551,7 +1557,7 @@ static void check_external_clock_speed(VideoState *is) {
    }
 }
 
-/* seek in the stream */
+/*seek实现 seek in the stream */
 static void stream_seek(VideoState *is, int64_t pos, int64_t rel, int seek_by_bytes)
 {
     if (!is->seek_req) {
@@ -1565,18 +1571,19 @@ static void stream_seek(VideoState *is, int64_t pos, int64_t rel, int seek_by_by
     }
 }
 
-/* pause or resume the video */
+/* 控制视频的播放和暂停pause or resume the video */
 static void stream_toggle_pause(VideoState *is)
 {
-    if (is->paused) {
+    if (is->paused) {//如果当前状态就是暂停，则接下来进入播放状态，需要更新vidclk
         is->frame_timer += av_gettime_relative() / 1000000.0 - is->vidclk.last_updated;
+		//由于frame_timer记下来视频从开始播放到当前帧播放的时间
         if (is->read_pause_return != AVERROR(ENOSYS)) {
             is->vidclk.paused = 0;
         }
         set_clock(&is->vidclk, get_clock(&is->vidclk), is->vidclk.serial);
     }
     set_clock(&is->extclk, get_clock(&is->extclk), is->extclk.serial);
-    is->paused = is->audclk.paused = is->vidclk.paused = is->extclk.paused = !is->paused;
+    is->paused = is->audclk.paused = is->vidclk.paused = is->extclk.paused = !is->paused;// pause状态反转
 }
 /**
  * 暂停
@@ -1595,6 +1602,9 @@ static void toggle_mute(VideoState *is)
     is->muted = !is->muted;
 }
 
+/***
+*更新音量
+**/
 static void update_volume(VideoState *is, int sign, double step)
 {
     double volume_level = is->audio_volume ? (20 * log(is->audio_volume / (double)SDL_MIX_MAXVOLUME) / log(10)) : -1000.0;
@@ -3445,10 +3455,10 @@ static void event_loop(VideoState *cur_stream)
                 cur_stream->force_refresh = 1;
                 break;
             case SDLK_p:
-            case SDLK_SPACE:
+            case SDLK_SPACE://空格键或者P键暂停
                 toggle_pause(cur_stream);//暂停
                 break;
-            case SDLK_m:
+            case SDLK_m://m键静音
                 toggle_mute(cur_stream);
                 break;
             case SDLK_KP_MULTIPLY:
@@ -3456,7 +3466,7 @@ static void event_loop(VideoState *cur_stream)
                 update_volume(cur_stream, 1, SDL_VOLUME_STEP);
                 break;
             case SDLK_KP_DIVIDE:
-            case SDLK_9:
+            case SDLK_9://9键增加音量
                 update_volume(cur_stream, -1, SDL_VOLUME_STEP);
                 break;
             case SDLK_s: //跳到下一帧 S: Step to next frame

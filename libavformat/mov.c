@@ -294,7 +294,9 @@ static int mov_metadata_hmmt(MOVContext *c, AVIOContext *pb, unsigned len)
     }
     return 0;
 }
-
+/**
+*读取udta box用户数据
+**/
 static int mov_read_udta_string(MOVContext *c, AVIOContext *pb, MOVAtom atom)
 {
     char tmp_key[5];
@@ -1112,6 +1114,14 @@ static int aax_filter(uint8_t *input, int size, MOVContext *c)
     return 0;
 }
 
+/**
+*
+读取ftyp box的"major_brand"、"minor_version"、"compatible_brands"信息，
+保存到AVFormatContext.metadata(AVDictionary结构体)中。
+"major_brand"保存为char *类型。
+"minor_version"保存为int类型。
+"compatible_brands"保存为char *类型。
+**/
 /* read major brand, minor version and compatible brands and store them as metadata */
 static int mov_read_ftyp(MOVContext *c, AVIOContext *pb, MOVAtom atom)
 {
@@ -1148,6 +1158,11 @@ static int mov_read_ftyp(MOVContext *c, AVIOContext *pb, MOVAtom atom)
 
     return 0;
 }
+/**
+如果MOVContext.found_moov为1，即发现了重复的moov box(理应不该发生)，直接返回。
+如果MOVContext.found_moov为0， 
+调用mov_read_default()来读取子box，把MOVContext.found_moov置为1。
+**/
 
 /* this atom should contain all header atoms */
 static int mov_read_moov(MOVContext *c, AVIOContext *pb, MOVAtom atom)
@@ -5662,6 +5677,7 @@ static int mov_read_default(MOVContext *c, AVIOContext *pb, MOVAtom atom)
         if (atom.size >= 8) {
             a.size = avio_rb32(pb);
             a.type = avio_rl32(pb);
+			//如果是空闲区域
             if (a.type == MKTAG('f','r','e','e') &&
                 a.size >= 8 &&
                 c->fc->strict_std_compliance < FF_COMPLIANCE_STRICT &&
@@ -5710,7 +5726,7 @@ static int mov_read_default(MOVContext *c, AVIOContext *pb, MOVAtom atom)
                 break;
             }
 
-        // container is user data
+        // container is user data；用户数据
         if (!parse && (atom.type == MKTAG('u','d','t','a') ||
                        atom.type == MKTAG('i','l','s','t')))
             parse = mov_read_udta_string;
@@ -6261,8 +6277,7 @@ static int mov_read_header(AVFormatContext *s)
 	//每一个box它的头部的8个字节是固定的，前四个字节是这个box的大小，后四个字节是这个box的类型，也就是途中的fytp,moov之类的。这个信息在ffmpeg中使用MOVAtom来标示
     MOVAtom atom = { AV_RL32("root") };//AV_RL32把字符串组合成int类型
     int i;
-	//av_log(NULL, AV_LOG_ERROR, "hxk>>>>mov->decryption_key_len:%d\n",mov->decryption_key_len);
-	//不知道这个判断什么的？？？
+	//视频加密
     if (mov->decryption_key_len != 0 && mov->decryption_key_len != AES_CTR_KEY_SIZE) {
         av_log(s, AV_LOG_ERROR, "Invalid decryption key len %d expected %d\n",
             mov->decryption_key_len, AES_CTR_KEY_SIZE);
@@ -6271,11 +6286,9 @@ static int mov_read_header(AVFormatContext *s)
 
     mov->fc = s;
     mov->trak_index = -1;//当前流的索引
-   // av_log(NULL, AV_LOG_ERROR, "hxk>>>>pb->seekable:%d\n",pb->seekable);
     /* .mov and .mp4 aren't streamable anyway (only progressive download if moov is before mdat) */
     if (pb->seekable & AVIO_SEEKABLE_NORMAL) {
         atom.size = avio_size(pb);//这个atom.size对应哪个呢？
-	//	av_log(NULL, AV_LOG_ERROR, "hxk>>>>atom.size:%d\n",atom.size);
     }
     else
         atom.size = INT64_MAX;
