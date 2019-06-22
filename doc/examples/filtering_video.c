@@ -37,7 +37,10 @@
 #include <libavfilter/buffersrc.h>
 #include <libavutil/opt.h>
 
-const char *filter_descr = "scale=78:24,transpose=cclock";
+//const char *filter_descr = "scale=78:24,transpose=cclock";
+const char *filter_descr = "boxblur";
+//const char *filter_descr = "lutyuv='u=128:v=128'";
+
 /* other way:
    scale=78:24 [scl]; [scl] transpose=cclock // assumes "[in]" and "[out]" to be input output pads respectively
  */
@@ -78,7 +81,8 @@ static int open_input_file(const char *filename)
     if (!dec_ctx)
         return AVERROR(ENOMEM);
     avcodec_parameters_to_context(dec_ctx, fmt_ctx->streams[video_stream_index]->codecpar);
-    av_opt_set_int(dec_ctx, "refcounted_frames", 1, 0);
+	//???
+	av_opt_set_int(dec_ctx, "refcounted_frames", 1, 0);
 
     /* init the video decoder */
     if ((ret = avcodec_open2(dec_ctx, dec, NULL)) < 0) {

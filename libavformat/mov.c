@@ -2679,6 +2679,9 @@ static int mov_read_stsz(MOVContext *c, AVIOContext *pb, MOVAtom atom)
     return 0;
 }
 
+/**
+*它包含media中的关键帧的sample表。如果此表不存在，说明每一个sample都是一个关键帧
+*/
 static int mov_read_stts(MOVContext *c, AVIOContext *pb, MOVAtom atom)
 {
     AVStream *st;
