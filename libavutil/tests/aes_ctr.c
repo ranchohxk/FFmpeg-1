@@ -24,7 +24,7 @@ static const DECLARE_ALIGNED(8, uint8_t, plain)[] = {
     0x6d, 0x6f, 0x73, 0x74, 0x20, 0x72, 0x61, 0x6e, 0x64, 0x6f, 0x6d
 };
 static DECLARE_ALIGNED(8, uint8_t, tmp)[11];
-
+//AES CTRº”√‹À„∑®
 int main (void)
 {
     int ret = 1;

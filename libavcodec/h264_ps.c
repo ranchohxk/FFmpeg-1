@@ -353,15 +353,15 @@ int ff_h264_decode_seq_parameter_set(GetBitContext *gb, AVCodecContext *avctx,
     }
 	//从gb-buffer中拷贝data_size个数据到sps的data中,sps->data中就是sps的内容
     memcpy(sps->data, gb->buffer, sps->data_size);
-/*	
+#if 0	
 	//打印出sps的内容
 	for( int i = 0;i <sizeof(sps->data);i++){
-		av_log(NULL,AV_LOG_ERROR,"sps->data:%x\n",sps->data[i]);
+		av_log(NULL,AV_LOG_WARNING,"sps->data:%x\n",sps->data[i]);
 	}
-*/
-	//profile型，8bit
-    //注意get_bits()
+#endif
+	
     /*
+   	注意get_bits()
     标识当前H.264码流的profile。我们知道，H.264中定义了三种常用的档次profile：
 	基准档次：baseline profile;
 	主要档次：main profile;
@@ -370,7 +370,7 @@ int ff_h264_decode_seq_parameter_set(GetBitContext *gb, AVCodecContext *avctx,
 	profile_idc = 66 → baseline profile;
 	profile_idc = 77 → main profile;
 	profile_idc = 88 → extended profile;
-	在新版的标准中，还包括了High、High 10、High 4:2:2、High 4:4:4、High 10 Intra、High 4:2:2 Intra、High 4:4:4 Intra、CAVLC 4:4:4 Intra等，每一种都由不同的profile_idc表示。
+	在新版的标准中，还包括了High、High 10、High 4:2:2、High 4:4:4、High 10 Intra、High 4:2:2 Intra、High 4:4:4 Intra、CAVLC 4:4:4 Intra等，每一种都由不同的profile_idc表示
 	另外，constraint_set0_flag ~ constraint_set5_flag是在编码的档次方面对码流增加的其他一些额外限制性条件。
 	在我们实验码流中，profile_idc = 0x42 = 66，因此码流的档次为baseline profile。
     */
@@ -382,17 +382,18 @@ int ff_h264_decode_seq_parameter_set(GetBitContext *gb, AVCodecContext *avctx,
     constraint_set_flags |= get_bits1(gb) << 4;   // constraint_set4_flag
     constraint_set_flags |= get_bits1(gb) << 5;   // constraint_set5_flag
     skip_bits(gb, 2);                             // reserved_zero_2bits
-    //level级，8bit
+    
     /*
+    level，8bit
     标识当前码流的Level。编码的Level定义了某种条件下的最大视频分辨率、最大视频帧率等参数，
     码流所遵从的level由level_idc指定。
 	当前码流中，level_idc = 0x1e = 30，因此码流的级别为3。
     */
     level_idc = get_bits(gb, 8);
-    //注意：get_ue_golomb()
+    //注意：get_ue_golomb(),无符号指数哥伦布编码
     //表示当前的序列参数集的id。通过该id值，图像参数集pps可以引用其代表的sps中的参数。
     sps_id    = get_ue_golomb_31(gb);
-    //超过最大的sps的数量32报错？？
+    //超过最大的sps的数量32报错
     if (sps_id >= MAX_SPS_COUNT) {
         av_log(avctx, AV_LOG_ERROR, "sps_id %u out of range\n", sps_id);
         goto fail;

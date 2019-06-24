@@ -218,11 +218,11 @@ typedef struct MOVStreamContext {
 
 typedef struct MOVContext {
     const AVClass *class; ///< class for private options
-    AVFormatContext *fc;
-    int time_scale;
+    AVFormatContext *fc;//临时持有AVFormatContext 的指针
+    int time_scale;//缩放因子
     int64_t duration;     ///< duration of the longest track
-    int found_moov;       ///< 'moov' atom has been found
-    int found_mdat;       ///< 'mdat' atom has been found
+    int found_moov;       ///< 'moov' atom has been found，拆包时是否发现moov头
+    int found_mdat;       ///< 'mdat' atom has been found,拆包时是否发现mdat头
     int found_hdlr_mdta;  ///< 'hdlr' atom with type 'mdta' has been found
     int trak_index;       ///< Index of the current 'trak'
     char **meta_keys;
