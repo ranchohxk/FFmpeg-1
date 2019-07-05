@@ -11,16 +11,16 @@ export PREFIX=$(pwd)/android/$CPU
 export ADDI_CFLAGS="-marm"
 ./configure --target-os=linux \
 --prefix=$PREFIX --arch=arm \
---disable-doc \
+--enable-doc \
 --enable-shared \
 --disable-static \
 --disable-yasm \
 --disable-symver \
 --enable-gpl \
 --disable-x86asm \
---disable-ffmpeg \
+--enable-ffmpeg \
 --disable-ffplay \
---disable-ffprobe \
+--enable-ffprobe \
 --disable-ffserver \
 --disable-linux-perf \ 
 --disable-doc \

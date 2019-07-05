@@ -145,6 +145,7 @@ typedef struct AVFilter {
     /**
      * Filter name. Must be non-NULL and unique among filters.
      */
+     //过滤器名称
     const char *name;
 
     /**
@@ -152,6 +153,7 @@ typedef struct AVFilter {
      *
      * You should use the NULL_IF_CONFIG_SMALL() macro to define it.
      */
+     //过滤器说明
     const char *description;
 
     /**
@@ -161,6 +163,7 @@ typedef struct AVFilter {
      * AVFILTER_FLAG_DYNAMIC_INPUTS set may have more inputs than present in
      * this list.
      */
+     //输入列表，由零元素终止
     const AVFilterPad *inputs;
     /**
      * List of outputs, terminated by a zeroed element.
@@ -169,6 +172,7 @@ typedef struct AVFilter {
      * AVFILTER_FLAG_DYNAMIC_OUTPUTS set may have more outputs than present in
      * this list.
      */
+     //输出列表，由零元素终止
     const AVFilterPad *outputs;
 
     /**

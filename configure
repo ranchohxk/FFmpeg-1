@@ -3335,9 +3335,9 @@ htmlpages_deps="perl"
 htmlpages_deps_any="makeinfo_html texi2html"
 txtpages_deps="perl makeinfo"
 doc_deps_any="manpages htmlpages podpages txtpages"
-
+# 默认参数 default parameters
 # default parameters
-
+# 日志
 logfile="ffbuild/config.log"
 
 # installation paths

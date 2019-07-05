@@ -57,11 +57,13 @@ struct AVFilterPad {
      * input may have the same name as an output. This may be NULL if this
      * pad has no need to ever be referenced by name.
      */
+     //过滤器pad名称
     const char *name;
 
     /**
      * AVFilterPad type.
      */
+     //pad元素的媒体类型，音频或者视频
     enum AVMediaType type;
 
     /**
@@ -70,6 +72,8 @@ struct AVFilterPad {
      *
      * Input video pads only.
      */
+     //获取视频缓存帧数据的回调函数，只能用于input video pad，
+     //如果这个用户没有定义，就会指派一个默认的回调函数 
     AVFrame *(*get_video_buffer)(AVFilterLink *link, int w, int h);
 
     /**
@@ -78,6 +82,8 @@ struct AVFilterPad {
      *
      * Input audio pads only.
      */
+     //获取音频缓存帧数据的回调函数，只能用于input audio pad，
+     //如果这个用户没有定义，就会指派一个默认的回调函数
     AVFrame *(*get_audio_buffer)(AVFilterLink *link, int nb_samples);
 
     /**
@@ -90,6 +96,7 @@ struct AVFilterPad {
      * must ensure that frame is properly unreferenced on error if it
      * hasn't been passed on to another filter.
      */
+      //过滤器回调函数，这个是当一个过滤器收到一个音频或者视频帧数据，然后调用这个回调函数进行处理
     int (*filter_frame)(AVFilterLink *link, AVFrame *frame);
 
     /**
@@ -101,6 +108,8 @@ struct AVFilterPad {
      *
      * Output pads only.
      */
+     //仅用于output pad的poll回调函数,这将返回立即可用的示例的数量。
+     //如果下一个request_frame()保证返回一个帧，那么它应该返回一个正值
     int (*poll_frame)(AVFilterLink *link);
 
     /**
@@ -110,6 +119,7 @@ struct AVFilterPad {
      *
      * Output pads only.
      */
+     //仅用于output pad,帧请求回调函数,
     int (*request_frame)(AVFilterLink *link);
 
     /**
@@ -126,6 +136,8 @@ struct AVFilterPad {
      * For both input and output filters, this should return zero on success,
      * and another value on error.
      */
+     //link配置回调函数，对于input pad，它主要是做一些link的属性检查，
+     //已经更新一些过滤器内部状态，例如自己定义的结构体状态初始化等，可以在这个函数里面做一些必要的操作，而对于ouput pad，他应该会设置width/height信息
     int (*config_props)(AVFilterLink *link);
 
     /**
