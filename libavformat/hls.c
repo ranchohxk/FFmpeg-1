@@ -729,13 +729,13 @@ static int parse_playlist(HLSContext *c, const char *url,
             memset(&variant_info, 0, sizeof(variant_info));
             ff_parse_key_value(ptr, (ff_parse_key_val_cb) handle_variant_args,
                                &variant_info);
-        } else if (av_strstart(line, "#EXT-X-KEY:", &ptr)) {
+        } else if (av_strstart(line, "#EXT-X-KEY:", &ptr)) {//hls加密
             struct key_info info = {{0}};
             ff_parse_key_value(ptr, (ff_parse_key_val_cb) handle_key_args,
                                &info);
             key_type = KEY_NONE;
             has_iv = 0;
-            if (!strcmp(info.method, "AES-128"))
+            if (!strcmp(info.method, "AES-128"))//AES128加密
                 key_type = KEY_AES_128;
             if (!strcmp(info.method, "SAMPLE-AES"))
                 key_type = KEY_SAMPLE_AES;
@@ -1792,6 +1792,7 @@ static int hls_read_header(AVFormatContext *s)
             goto fail;
 
         ret = avformat_open_input(&pls->ctx, pls->segments[0]->url, in_fmt, NULL);
+		av_log(NULL,AV_LOG_ERROR,"hxk>>>%s\n",pls->segments[0]->url);
         if (ret < 0)
             goto fail;
 
@@ -2131,7 +2132,9 @@ static int hls_read_seek(AVFormatContext *s, int stream_index,
 
     return 0;
 }
-
+/**
+* hls文件探测
+**/
 static int hls_probe(AVProbeData *p)
 {
     /* Require #EXTM3U at the start, and either one of the ones below
