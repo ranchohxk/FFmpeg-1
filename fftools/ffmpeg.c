@@ -4092,7 +4092,9 @@ static int get_input_packet_mt(InputFile *f, AVPacket *pkt)
                                         AV_THREAD_MESSAGE_NONBLOCK : 0);
 }
 #endif
-
+/**
+*获取一帧压缩编码数据，即一个AVPacket。其中调用了av_read_frame()
+*/
 static int get_input_packet(InputFile *f, AVPacket *pkt)
 {
     if (f->rate_emu) {
