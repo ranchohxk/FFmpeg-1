@@ -992,7 +992,7 @@ static int open_input_file(OptionsContext *o, const char *filename)
 
     /* get default parameters from command line */
     ic = avformat_alloc_context();
-    if (!ic) {
+    if (!ic) {//申请失败，直接退出
         print_error(filename, AVERROR(ENOMEM));
         exit_program(1);
     }
@@ -1085,7 +1085,7 @@ static int open_input_file(OptionsContext *o, const char *filename)
         for (i = 0; i < orig_nb_streams; i++)
             av_dict_free(&opts[i]);
         av_freep(&opts);
-		//没找到解码器，关闭
+		//没找到媒体信息
         if (ret < 0) {
             av_log(NULL, AV_LOG_FATAL, "%s: could not find codec parameters\n", filename);
             if (ic->nb_streams == 0) {
@@ -3292,6 +3292,7 @@ static int open_files(OptionGroupList *l, const char *inout,
 }
 /**
 *解析ffmpeg的命令行options
+* 打开输入/输出文件
 **/
 int ffmpeg_parse_options(int argc, char **argv)
 {
@@ -3319,7 +3320,7 @@ int ffmpeg_parse_options(int argc, char **argv)
     /* configure terminal and setup signal handlers */
     term_init();
 
-    /* 调用open_input_file打开输入文件open input files */
+    /* 回调open_input_file打开输入文件open input files */
     ret = open_files(&octx.groups[GROUP_INFILE], "input", open_input_file);
     if (ret < 0) {
         av_log(NULL, AV_LOG_FATAL, "Error opening input files: ");
@@ -3333,7 +3334,7 @@ int ffmpeg_parse_options(int argc, char **argv)
         goto fail;
     }
 
-    /* 调用open_output_file打开输出文件open output files */
+    /* 回调open_output_file打开输出文件open output files */
     ret = open_files(&octx.groups[GROUP_OUTFILE], "output", open_output_file);
     if (ret < 0) {
         av_log(NULL, AV_LOG_FATAL, "Error opening output files: ");

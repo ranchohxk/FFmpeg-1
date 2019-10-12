@@ -2303,7 +2303,9 @@ static int send_frame_to_filters(InputStream *ist, AVFrame *decoded_frame)
     }
     return ret;
 }
-
+/**
+*解码音频(并不一定是一帧，是一个AVPacket)
+**/
 static int decode_audio(InputStream *ist, AVPacket *pkt, int *got_output,
                         int *decode_failed)
 {
@@ -2367,7 +2369,9 @@ static int decode_audio(InputStream *ist, AVPacket *pkt, int *got_output,
     av_frame_unref(decoded_frame);
     return err < 0 ? err : ret;
 }
-
+/**
+* 解码一帧视频
+**/
 static int decode_video(InputStream *ist, AVPacket *pkt, int *got_output, int64_t *duration_pts, int eof,
                         int *decode_failed)
 {
