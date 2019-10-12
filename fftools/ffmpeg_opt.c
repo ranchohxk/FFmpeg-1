@@ -3060,7 +3060,9 @@ static int opt_profile(void *optctx, const char *opt, const char *arg)
     av_dict_set(&o->g->codec_opts, opt, arg, 0);
     return 0;
 }
-
+/**
+*处理视频滤镜的参数
+*/
 static int opt_video_filters(void *optctx, const char *opt, const char *arg)
 {
     OptionsContext *o = optctx;

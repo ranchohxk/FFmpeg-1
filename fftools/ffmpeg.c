@@ -142,14 +142,14 @@ AVIOContext *progress_avio = NULL;
 static uint8_t *subtitle_out;
 
 InputStream **input_streams = NULL;
-int        nb_input_streams = 0;
+int        nb_input_streams = 0;//输入文件数量
 InputFile   **input_files   = NULL;
 int        nb_input_files   = 0;
 
 OutputStream **output_streams = NULL;
 int         nb_output_streams = 0;
 OutputFile   **output_files   = NULL;
-int         nb_output_files   = 0;
+int         nb_output_files   = 0;//输出文件数量
 
 FilterGraph **filtergraphs;
 int        nb_filtergraphs;
@@ -4778,7 +4778,7 @@ int main(int argc, char **argv)
 {
     int i, ret;
     int64_t ti;
-
+	//window 需要使用
     init_dynload();
 
     register_exit(ffmpeg_cleanup);
@@ -4810,25 +4810,25 @@ int main(int argc, char **argv)
 	**/
     ret = ffmpeg_parse_options(argc, argv);
     if (ret < 0)
-        exit_program(1);
-	//如果输入和输出文件都小于0，退出
+        exit_program(1);//退出程序
+	//如果输入和输出文件都小于0，展示使用并退出
     if (nb_output_files <= 0 && nb_input_files == 0) {
         show_usage();
         av_log(NULL, AV_LOG_WARNING, "Use -h to get full help or, even better, run 'man %s'\n", program_name);
         exit_program(1);
     }
-
+	//如果输出文件数量小于0，退出
     /* file converter / grab */
     if (nb_output_files <= 0) {
         av_log(NULL, AV_LOG_FATAL, "At least one output file must be specified\n");
 		//退出和清理
         exit_program(1);
     }
-
-//     if (nb_input_files == 0) {
-//         av_log(NULL, AV_LOG_FATAL, "At least one input file must be specified\n");
-//         exit_program(1);
-//     }
+	//如果输入文件等于0，退出
+     if (nb_input_files == 0) {
+         av_log(NULL, AV_LOG_FATAL, "At least one input file must be specified\n");
+         exit_program(1);
+     }
 
     for (i = 0; i < nb_output_files; i++) {
         if (strcmp(output_files[i]->ctx->oformat->name, "rtp"))

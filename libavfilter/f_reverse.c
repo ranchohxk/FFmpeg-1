@@ -126,7 +126,7 @@ static const AVFilterPad reverse_outputs[] = {
     },
     { NULL }
 };
-
+// ”∆µµπ∑≈
 AVFilter ff_vf_reverse = {
     .name        = "reverse",
     .description = NULL_IF_CONFIG_SMALL("Reverse a clip."),
