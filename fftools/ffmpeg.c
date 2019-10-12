@@ -2304,7 +2304,7 @@ static int send_frame_to_filters(InputStream *ist, AVFrame *decoded_frame)
     return ret;
 }
 /**
-*解码音频(并不一定是一帧，是一个AVPacket)
+*解码音频(并不一定是一帧,是一个AVPacket)
 **/
 static int decode_audio(InputStream *ist, AVPacket *pkt, int *got_output,
                         int *decode_failed)
