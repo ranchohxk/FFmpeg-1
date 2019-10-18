@@ -699,7 +699,9 @@ static AVCodec *find_codec_or_die(const char *name, enum AVMediaType type, int e
     }
     return codec;
 }
-
+/**
+*选择解码器
+**/
 static AVCodec *choose_decoder(OptionsContext *o, AVFormatContext *s, AVStream *st)
 {
     char *codec_name = NULL;
@@ -1139,7 +1141,7 @@ static int open_input_file(OptionsContext *o, const char *filename)
     if (!f)
         exit_program(1);
     input_files[nb_input_files - 1] = f;
-
+	//把命令行结构体中的值赋值给InputFIle结构体
     f->ctx        = ic;
     f->ist_index  = nb_input_streams - ic->nb_streams;
     f->start_time = o->start_time;
@@ -1148,7 +1150,7 @@ static int open_input_file(OptionsContext *o, const char *filename)
     f->ts_offset  = o->input_ts_offset - (copy_ts ? (start_at_zero && ic->start_time != AV_NOPTS_VALUE ? ic->start_time : 0) : timestamp);
     f->nb_streams = ic->nb_streams;
     f->rate_emu   = o->rate_emu;
-    f->accurate_seek = o->accurate_seek;
+    f->accurate_seek = o->accurate_seek;//从命令行结构体获取的值复制给InputFile的结构体
     f->loop = o->loop;
     f->duration = 0;
     f->time_base = (AVRational){ 1, 1 };
@@ -3048,7 +3050,9 @@ static int opt_qscale(void *optctx, const char *opt, const char *arg)
     av_free(s);
     return ret;
 }
-
+/**
+*设置profile
+**/
 static int opt_profile(void *optctx, const char *opt, const char *arg)
 {
     OptionsContext *o = optctx;

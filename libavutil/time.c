@@ -52,7 +52,7 @@ int64_t av_gettime(void)
     return -1;
 #endif
 }
-
+//获取时间(毫秒)
 int64_t av_gettime_relative(void)
 {
 #if HAVE_CLOCK_GETTIME && defined(CLOCK_MONOTONIC)
@@ -61,8 +61,8 @@ int64_t av_gettime_relative(void)
 #endif
     {
         struct timespec ts;
-        clock_gettime(CLOCK_MONOTONIC, &ts);
-        return (int64_t)ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
+        clock_gettime(CLOCK_MONOTONIC, &ts);//CLOCK_MONOTONIC:从系统启动这一刻起开始计时,不受系统时间被用户改变的影响
+        return (int64_t)ts.tv_sec * 1000000 + ts.tv_nsec / 1000;//把纳秒的时间单位转成毫秒
     }
 #endif
     return av_gettime() + 42 * 60 * 60 * INT64_C(1000000);

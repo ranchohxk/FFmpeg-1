@@ -131,7 +131,7 @@ static int ifilter_has_all_input_formats(FilterGraph *fg);
 static int run_as_daemon  = 0;
 static int nb_frames_dup = 0;
 static unsigned dup_warning = 1000;
-static int nb_frames_drop = 0;
+static int nb_frames_drop = 0;//丢帧数
 static int64_t decode_error_stat[2];
 
 static int want_sdp = 1;
@@ -152,7 +152,7 @@ OutputFile   **output_files   = NULL;
 int         nb_output_files   = 0;//输出文件数量
 
 FilterGraph **filtergraphs;
-int        nb_filtergraphs;
+int        nb_filtergraphs;//滤镜数量
 
 #if HAVE_TERMIOS_H
 
@@ -888,7 +888,9 @@ static int check_recording_time(OutputStream *ost)
     }
     return 1;
 }
-
+/**
+*音频编码
+**/
 static void do_audio_out(OutputFile *of, OutputStream *ost,
                          AVFrame *frame)
 {
@@ -1031,7 +1033,9 @@ static void do_subtitle_out(OutputFile *of,
         output_packet(of, &pkt, ost, 0);
     }
 }
-
+/**
+*编码视频
+**/
 static void do_video_out(OutputFile *of,
                          OutputStream *ost,
                          AVFrame *next_picture,
@@ -1834,11 +1838,13 @@ static void print_report(int is_last_report, int64_t timer_start, int64_t cur_ti
     if (is_last_report)
         print_final_stats(total_size);
 }
-
+/**
+*刷新编码器
+**/
 static void flush_encoders(void)
 {
     int i, ret;
-
+	//获取outputstream outputfile等
     for (i = 0; i < nb_output_streams; i++) {
         OutputStream   *ost = output_streams[i];
         AVCodecContext *enc = ost->enc_ctx;
@@ -2887,14 +2893,15 @@ static int get_buffer(AVCodecContext *s, AVFrame *frame, int flags)
 
     return avcodec_default_get_buffer2(s, frame, flags);
 }
-
+/**
+*初始化输入流
+**/
 static int init_input_stream(int ist_index, char *error, int error_len)
 {
     int ret;
     InputStream *ist = input_streams[ist_index];
-
     if (ist->decoding_needed) {
-        AVCodec *codec = ist->dec;
+        AVCodec *codec = ist->dec;//获取codec
         if (!codec) {
             snprintf(error, error_len, "Decoder (codec %s) not found for input stream #%d:%d",
                     avcodec_get_name(ist->dec_ctx->codec_id), ist->file_index, ist->st->index);
@@ -2925,7 +2932,7 @@ static int init_input_stream(int ist_index, char *error, int error_len)
         /* Attached pics are sparse, therefore we would not want to delay their decoding till EOF. */
         if (ist->st->disposition & AV_DISPOSITION_ATTACHED_PIC)
             av_dict_set(&ist->decoder_opts, "threads", "1", 0);
-
+		//hw 硬解码
         ret = hw_device_setup_for_decode(ist);
         if (ret < 0) {
             snprintf(error, error_len, "Device setup failed for "
@@ -3638,7 +3645,7 @@ static void report_new_stream(int input_index, AVPacket *pkt)
            pkt->pos, av_ts2timestr(pkt->dts, &st->time_base));
     file->nb_streams_warn = pkt->stream_index + 1;
 }
-//转码的初始化工作
+//设置编码参数,打开所有输出流的编码器,打开所有输入流的解码器,写入所有输出文件的文件头
 static int transcode_init(void)
 {
     int ret = 0, i, j, k;
@@ -3646,7 +3653,7 @@ static int transcode_init(void)
     OutputStream *ost;
     InputStream *ist;
     char error[1024] = {0};
-
+	//滤镜数量处理
     for (i = 0; i < nb_filtergraphs; i++) {
         FilterGraph *fg = filtergraphs[i];
         for (j = 0; j < fg->nb_outputs; j++) {
@@ -3662,15 +3669,15 @@ static int transcode_init(void)
         }
     }
 
-    /* init framerate emulation */
+    /* 初始化帧速率仿真 init framerate emulation */
     for (i = 0; i < nb_input_files; i++) {
         InputFile *ifile = input_files[i];
         if (ifile->rate_emu)
             for (j = 0; j < ifile->nb_streams; j++)
-                input_streams[j + ifile->ist_index]->start = av_gettime_relative();
+                input_streams[j + ifile->ist_index]->start = av_gettime_relative();//获取数据开始读取的时间
     }
 
-    /* 其中调用了avcodec_open2()打开编码器,init input streams */
+    /* init input streams函数调用了avcodec_open2()打开编码器 */
     for (i = 0; i < nb_input_streams; i++)
         if ((ret = init_input_stream(i, error, sizeof(error))) < 0) {
             for (i = 0; i < nb_output_streams; i++) {
@@ -3680,7 +3687,7 @@ static int transcode_init(void)
             goto dump_format;
         }
 
-    /* open each encoder */
+    /* 打开输出文件的编码器open each encoder  */
     for (i = 0; i < nb_output_streams; i++) {
         // skip streams fed from filtergraphs until we have a frame for them
         if (output_streams[i]->filter)
@@ -3691,7 +3698,7 @@ static int transcode_init(void)
             goto dump_format;
     }
 
-    /* discard unused programs */
+    /*丢弃未使用的项目  ？？？ discard unused programs */
     for (i = 0; i < nb_input_files; i++) {
         InputFile *ifile = input_files[i];
         for (j = 0; j < ifile->ctx->nb_programs; j++) {
@@ -3707,10 +3714,10 @@ static int transcode_init(void)
         }
     }
 
-    /* write headers for files with no streams */
+    /* 对没有流的文件写头，确保文件是视频文件？write headers for files with no streams */
     for (i = 0; i < nb_output_files; i++) {
         oc = output_files[i]->ctx;
-        if (oc->oformat->flags & AVFMT_NOSTREAMS && oc->nb_streams == 0) {
+        if (oc->oformat->flags & AVFMT_NOSTREAMS && oc->nb_streams == 0) {//流的数量等于0
             ret = check_init_output_file(output_files[i], i);
             if (ret < 0)
                 goto dump_format;
@@ -4097,7 +4104,7 @@ static int get_input_packet_mt(InputFile *f, AVPacket *pkt)
 */
 static int get_input_packet(InputFile *f, AVPacket *pkt)
 {
-    if (f->rate_emu) {
+    if (f->rate_emu) {//???不知道意思
         int i;
         for (i = 0; i < f->nb_streams; i++) {
             InputStream *ist = input_streams[f->ist_index + i];
@@ -4214,6 +4221,7 @@ static int seek_to_start(InputFile *ifile, AVFormatContext *is)
     return ret;
 }
 
+//获取一帧压缩视频并解码
 /*
  * Return
  * - 0 -- one packet was read and processed
@@ -4239,7 +4247,7 @@ static int process_input(int file_index)
         ifile->eagain = 1;
         return ret;
     }
-    if (ret < 0 && ifile->loop) {
+    if (ret < 0 && ifile->loop) {//如果读取失败了，且开启了循环，seek到文件开始的地方
         if ((ret = seek_to_start(ifile, is)) < 0)
             return ret;
         ret = get_input_packet(ifile, &pkt);
@@ -4457,7 +4465,7 @@ static int process_input(int file_index)
     }
 
     sub2video_heartbeat(ist, pkt.pts);
-
+	//解码
     process_input_packet(ist, &pkt, 0);
 
 discard_packet:
@@ -4524,7 +4532,7 @@ static int transcode_step(void)
     OutputStream *ost;
     InputStream  *ist = NULL;
     int ret;
-
+	//获取输出流
     ost = choose_output();
     if (!ost) {
         if (got_eagain()) {
@@ -4535,7 +4543,7 @@ static int transcode_step(void)
         av_log(NULL, AV_LOG_VERBOSE, "No more inputs to read from, finishing.\n");
         return AVERROR_EOF;
     }
-
+	//滤镜相关处理
     if (ost->filter && !ost->filter->graph->graph) {
         if (ifilter_has_all_input_formats(ost->filter->graph)) {
             ret = configure_filtergraph(ost->filter->graph);
@@ -4549,7 +4557,7 @@ static int transcode_step(void)
     if (ost->filter && ost->filter->graph->graph) {
         if (!ost->initialized) {
             char error[1024] = {0};
-            ret = init_output_stream(ost, error, sizeof(error));
+            ret = init_output_stream(ost, error, sizeof(error));//滤镜获取输出流
             if (ret < 0) {
                 av_log(NULL, AV_LOG_ERROR, "Error initializing output stream %d:%d -- %s\n",
                        ost->file_index, ost->index, error);
@@ -4575,9 +4583,9 @@ static int transcode_step(void)
         }
     } else {
         av_assert0(ost->source_index >= 0);
-        ist = input_streams[ost->source_index];
+        ist = input_streams[ost->source_index];//获取输入流
     }
-	//完成解码工作
+	//解码
     ret = process_input(ist->file_index);
     if (ret == AVERROR(EAGAIN)) {
         if (input_files[ist->file_index]->eagain)
@@ -4602,7 +4610,7 @@ static int transcode(void)
     InputStream *ist;
     int64_t timer_start;
     int64_t total_packets_written = 0;
-	//转码的初始化工作
+	//设置编码参数,打开所有输出流的编码器,打开所有输入流的解码器,写入所有输出文件的文件头
     ret = transcode_init();
     if (ret < 0)
         goto fail;
@@ -4621,7 +4629,7 @@ static int transcode(void)
     while (!received_sigterm) {
         int64_t cur_time= av_gettime_relative();
 
-        /* 检测键盘操作。例如转码的过程中按下“Q”键之后，会退出转码if 'q' pressed, exits */
+        /* 检测键盘操作,例如转码的过程中按下“Q”键之后，会退出转码if 'q' pressed, exits */
         if (stdin_interaction)
             if (check_keyboard_interaction(cur_time) < 0)
                 break;
@@ -4633,7 +4641,7 @@ static int transcode(void)
         }
 		//进行转码
         ret = transcode_step();
-        if (ret < 0 && ret != AVERROR_EOF) {
+        if (ret < 0 && ret != AVERROR_EOF) {//转码失败
             char errbuf[128];
             av_strerror(ret, errbuf, sizeof(errbuf));
 
@@ -4641,7 +4649,8 @@ static int transcode(void)
             break;
         }
 
-        /* 打印转码信息，输出到屏幕上dump report by using the output first video and audio streams */
+        /* dump report by using the output first video and audio streams */
+		/*打印转码信息，输出到屏幕上*/
         print_report(0, timer_start, cur_time);
     }
 #if HAVE_PTHREADS
@@ -4649,6 +4658,7 @@ static int transcode(void)
 #endif
 
     /* at the end of stream, we must flush the decoder buffers */
+	//刷新解码buffer
     for (i = 0; i < nb_input_streams; i++) {
         ist = input_streams[i];
         if (!input_files[ist->file_index]->eof_reached && ist->decoding_needed) {

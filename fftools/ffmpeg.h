@@ -99,7 +99,9 @@ typedef struct {
     int  file_idx,  stream_idx,  channel_idx; // input
     int ofile_idx, ostream_idx;               // output
 } AudioChannelMap;
-
+/**
+*命令行解析获取的参数信息结构体
+**/
 typedef struct OptionsContext {
     OptionGroup *g;
 
@@ -298,9 +300,11 @@ typedef struct FilterGraph {
     OutputFilter **outputs;
     int         nb_outputs;
 } FilterGraph;
-
+/**
+*输入流的结构体
+**/
 typedef struct InputStream {
-    int file_index;
+    int file_index;//文件索引
     AVStream *st;
     int discard;             /* true if stream data should be discarded */
     int user_set_discard;
@@ -341,7 +345,7 @@ typedef struct InputStream {
     int top_field_first;
     int guess_layout_max;
 
-    int autorotate;
+    int autorotate;//自动旋转
 
     int fix_sub_duration;
     struct { /* previous decoded subtitle and related variables */
@@ -402,7 +406,7 @@ typedef struct InputFile {
     int eof_reached;      /* true if eof reached */
     int eagain;           /* true if last read attempt returned EAGAIN */
     int ist_index;        /* index of first stream in input_streams */
-    int loop;             /* set number of times input stream should be looped */
+    int loop;             /* set number of times input stream should be looped 输入流循环的次数*/
     int64_t duration;     /* actual duration of the longest stream in a file
                              at the moment when looping happens */
     AVRational time_base; /* time base of the duration */
@@ -416,7 +420,7 @@ typedef struct InputFile {
     int nb_streams;       /* number of stream that ffmpeg is aware of; may be different
                              from ctx.nb_streams if new streams appear during av_read_frame() */
     int nb_streams_warn;  /* number of streams that the user was warned of */
-    int rate_emu;
+    int rate_emu;//??? 还不知道干嘛的
     int accurate_seek;
 
 #if HAVE_PTHREADS
